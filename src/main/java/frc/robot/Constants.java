@@ -68,6 +68,9 @@ public final class Constants {
     public static final double kTurningI = 0;
     public static final double kTurningD = 0;
 
+    public static final int kDrivingCurrentLimitAmps = 40;
+    public static final int kTurningCurrentLimitAmps = 30;
+
     public static final boolean kGyroReversed = false;
   }
 
