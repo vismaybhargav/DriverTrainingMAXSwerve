@@ -20,22 +20,20 @@ public final class Configs {
 
             drivingConfig
                     .idleMode(IdleMode.kBrake)
-                    .smartCurrentLimit(Constants.DriveConstants.kDrivingCurrentLimitAmps);
+                    .smartCurrentLimit(50);
             drivingConfig.encoder
                     .positionConversionFactor(drivingFactor) // meters
                     .velocityConversionFactor(drivingFactor / 60.0); // meters per second
             drivingConfig.closedLoop
                     .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                     // These are example gains you may need to them for your own robot!
-                    .pid(Constants.DriveConstants.kDrivingP, 
-                        Constants.DriveConstants.kDrivingI, 
-                        Constants.DriveConstants.kDrivingD)
+                    .pid(0.04, 0, 0)
                     .velocityFF(drivingVelocityFeedForward)
                     .outputRange(-1, 1);
 
             turningConfig
                     .idleMode(IdleMode.kBrake)
-                    .smartCurrentLimit(Constants.DriveConstants.kTurningCurrentLimitAmps);
+                    .smartCurrentLimit(20);
             turningConfig.absoluteEncoder
                     // Invert the turning encoder, since the output shaft rotates in the opposite
                     // direction of the steering motor in the MAXSwerve Module.
@@ -45,9 +43,7 @@ public final class Configs {
             turningConfig.closedLoop
                     .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
                     // These are example gains you may need to them for your own robot!
-                    .pid(Constants.DriveConstants.kTurningP, 
-                        Constants.DriveConstants.kTurningI, 
-                        Constants.DriveConstants.kTurningD)
+                    .pid(1, 0, 0)
                     .outputRange(-1, 1)
                     // Enable PID wrap around for the turning motor. This will allow the PID
                     // controller to go through 0 to get to the setpoint i.e. going from 350 degrees

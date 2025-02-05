@@ -1,22 +1,11 @@
-# MAXSwerve Java Template v2025.1
+# FSMBotTemplate
 
-See [the online changelog](https://github.com/REVrobotics/MAXSwerve-Java-Template/blob/main/CHANGELOG.md) for information about updates to the template that may have been released since you created your project.
+Finite-state-machine based template project for WPILib based robot code.
 
-## Description
+To provide a more structured framework for FIRST Robotics Competition robot development, this project defines subsystem behaviors strictly in terms of multiple separate finite state machines updated in a round-robin fashion. This will make scheduling behavior explicitly visible instead of hidden behind the command scheduler, and avoid ambiguous shared state between command and subsystems under the WPILib command based programming model.
 
-A template project for an FRC swerve drivetrain that uses REV MAXSwerve Modules.
+## FSMSystem
+The primary base class for robot systems. Each robot system is defined in terms of a Mealy-style finite state machine with control over a well-defined set of robot hardware. 
 
-Note that this is meant to be used with a drivetrain composed of four MAXSwerve Modules, each configured with two SPARKS MAX, a NEO as the driving motor, a NEO 550 as the turning motor, and a REV Through Bore Encoder as the absolute turning encoder.
-
-To get started, make sure you have calibrated the zero offsets for the absolute encoders in the Hardware Client using the `Absolute Encoder` tab under the associated turning SPARK MAX devices.
-
-## Prerequisites
-
-* SPARK MAX Firmware v25.0.0
-* REVLib v2025.0.0
-
-## Configuration
-
-It is possible that this project will not work for your robot right out of the box. Various things like the CAN IDs, PIDF gains, chassis configuration, etc. must be determined for your own robot!
-
-These values can be adjusted in the `Configs.java` and `Constants.java` files.
+## TeleopInput
+Utility class with ownership of teleop input handling. The single global instance of this class mediates access to inputs during the teleoperated mode and abstracts control mappings.
