@@ -55,4 +55,8 @@ public class TeleopInput {
 	public boolean getDriveControllerZeroHeadingPressed() {
 		return driveController.getShareButton();
 	}
+
+	public boolean getDriveControllerAlignToTagPressed() {
+		return driveController.getSquareButton();
+	}
 }

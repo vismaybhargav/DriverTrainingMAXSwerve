@@ -12,6 +12,7 @@ import frc.robot.Constants;
 import frc.robot.input.TeleopInput;
 import frc.robot.MAXSwerveModule;
 import frc.robot.Constants.DriveConstants;
+import frc.robot.vision.RaspberryPi;
 import jdk.jshell.spi.ExecutionControl;
 import org.littletonrobotics.junction.Logger;
 
@@ -20,6 +21,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	// FSM state definitions
 	public enum FSMState {
 		TELEOP_STATE,
+		ALIGN_TO_TAG_STATE
 	}
 
 	/* ======================== Private variables ======================== */
@@ -32,6 +34,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	private MAXSwerveModule rearLeft;
 	private MAXSwerveModule rearRight;
 	private final AHRS gyro;
+	private final RaspberryPi rpi;
 
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
 			DriveConstants.DRIVE_KINEMATICS,
@@ -77,6 +80,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		);
 
 		gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
+		rpi = new RaspberryPi();
 
 		headingController.enableContinuousInput(-Math.PI, Math.PI);
 
@@ -171,6 +175,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		Logger.recordOutput("DriveFSM/TeleOp/Inputs/A-Input", rotInput);
 
 		// Calculate speeds
+		// Clamping the speeds here might be redundant as the kinematics should already do this.
 		var xSpeed = -MathUtil.applyDeadband(
 				xInput, Constants.OIConstants.kDriveDeadband
 		) * DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
@@ -188,11 +193,14 @@ public class DriveFSMSystem extends SubsystemBase {
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/Y-Speed", ySpeed);
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/A-Speed", aSpeed);
 
-		// Calculate swerve module states
+		// Calculate and send speeds
 		drive(ChassisSpeeds.fromFieldRelativeSpeeds(
 			xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())
 		));
 
+		if(input.getDriveControllerZeroHeadingPressed()) {
+			zeroHeading();
+		}
 	}
 
 	public void followTrajectory(SwerveSample sample) {
@@ -280,7 +288,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		return odometry.getPoseMeters();
 	}
 
-	public Pose2d resetOdometry(Pose2d pose) {
+	public void resetOdometry(Pose2d pose) {
 		odometry.resetPosition(
 				Rotation2d.fromDegrees(getHeading()),
 				getModulePositions(),
