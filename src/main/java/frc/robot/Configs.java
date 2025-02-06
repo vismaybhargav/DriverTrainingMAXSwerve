@@ -13,10 +13,10 @@ public final class Configs {
 
         static {
             // Use module constants to calculate conversion factors and feed forward gain.
-            double drivingFactor = ModuleConstants.kWheelDiameterMeters * Math.PI
-                    / ModuleConstants.kDrivingMotorReduction;
+            double drivingFactor = ModuleConstants.WHEEL_DIAMETER_METERS * Math.PI
+                    / ModuleConstants.DRIVING_MOTOR_REDUCTION;
             double turningFactor = 2 * Math.PI;
-            double drivingVelocityFeedForward = 1 / ModuleConstants.kDriveWheelFreeSpeedRps;
+            double drivingVelocityFeedForward = 1 / ModuleConstants.DRIVE_WHEEL_FREE_SPEED_RPS;
 
             drivingConfig
                     .idleMode(IdleMode.kBrake)
