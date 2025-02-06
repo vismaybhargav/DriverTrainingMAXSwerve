@@ -1,13 +1,12 @@
 package frc.robot.systems;
 
+import choreo.trajectory.SwerveSample;
 import com.studica.frc.AHRS;
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.kinematics.ChassisSpeeds;
-import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
-import edu.wpi.first.math.kinematics.SwerveDriveOdometry;
-import edu.wpi.first.math.kinematics.SwerveModulePosition;
+import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants;
 import frc.robot.input.TeleopInput;
@@ -32,10 +31,9 @@ public class DriveFSMSystem extends SubsystemBase {
 	private MAXSwerveModule frontRight;
 	private MAXSwerveModule rearLeft;
 	private MAXSwerveModule rearRight;
+	private final AHRS gyro;
 
-	private AHRS gyro;
-
-	private SwerveDriveOdometry odometry = new SwerveDriveOdometry(
+	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
 			DriveConstants.DRIVE_KINEMATICS,
 			Rotation2d.fromDegrees(getHeading()),
 			new SwerveModulePosition[]{
@@ -45,6 +43,11 @@ public class DriveFSMSystem extends SubsystemBase {
 					rearRight.getPosition()
 			}
 	);
+
+	// Auto PIDS
+	private final PIDController xController = new PIDController(5, 0, 0);
+	private final PIDController yController = new PIDController(5, 0, 0);
+	private final PIDController headingController = new PIDController(0.75, 0, 0);
 
 	/* ======================== Constructor ======================== */
 	/**
@@ -102,6 +105,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	public void reset() {
 		currentState = FSMState.TELEOP_STATE;
+		zeroHeading();
 
 		// Call one tick of update to ensure outputs reflect start state
 		update(null);
@@ -186,24 +190,49 @@ public class DriveFSMSystem extends SubsystemBase {
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/A-Speed", aSpeed);
 
 		// Calculate swerve module states
-		var swerveStates = DriveConstants.DRIVE_KINEMATICS.toSwerveModuleStates(
-				DriveConstants.IS_FIELD_RELATIVE ?
-					ChassisSpeeds.fromFieldRelativeSpeeds(
-						xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())
-					)
-				: new ChassisSpeeds(xSpeed, ySpeed, aSpeed)
+		drive(ChassisSpeeds.fromFieldRelativeSpeeds(
+			xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())
+		));
+
+		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", getModuleStates());
+	}
+
+	public void followTrajectory(SwerveSample sample) {
+		var pose = getPose();
+
+		var targetSpeeds = new ChassisSpeeds(
+			sample.vx + xController.calculate(pose.getX(), sample.x),
+			sample.vy + yController.calculate(pose.getY(), sample.y),
+			sample.omega + headingController.calculate(pose.getRotation().getRadians(), sample.heading)
 		);
 
-		// Desaturate wheel speeds (i.e limit speeds to max speed)
-		SwerveDriveKinematics.desaturateWheelSpeeds(swerveStates, DriveConstants.MAX_SPEED_METERS_PER_SECOND);
+		
+	}
 
-		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", swerveStates);
+	/**
+	 * Drive the robot using the given chassis speeds. Robot relative
+	 * @param speeds Chassis speeds
+	 */
+	private void drive(ChassisSpeeds speeds) {
+		var states = DriveConstants.DRIVE_KINEMATICS.toSwerveModuleStates(speeds);
+		SwerveDriveKinematics.desaturateWheelSpeeds(states, DriveConstants.MAX_SPEED_METERS_PER_SECOND);
+		setModuleStates(states);
+	}
 
-		// Set the states
-		frontLeft.setDesiredState(swerveStates[0]);
-		frontRight.setDesiredState(swerveStates[1]);
-		rearLeft.setDesiredState(swerveStates[2]);
-		rearRight.setDesiredState(swerveStates[3]);
+	private void setModuleStates(SwerveModuleState[] states) {
+		frontLeft.setDesiredState(states[0]);
+		frontRight.setDesiredState(states[1]);
+		rearLeft.setDesiredState(states[2]);
+		rearRight.setDesiredState(states[3]);
+	}
+
+	private SwerveModuleState[] getModuleStates() {
+		var swerveStates = new SwerveModuleState[4];
+		swerveStates[0] = frontLeft.getState();
+		swerveStates[1] = frontRight.getState();
+		swerveStates[2] = rearLeft.getState();
+		swerveStates[3] = rearRight.getState();
+		return swerveStates;
 	}
 
 	/**
