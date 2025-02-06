@@ -4,26 +4,27 @@
 package frc.robot;
 
 // WPILib Imports
-import edu.wpi.first.wpilibj.TimedRobot;
 
 // Systems
-import frc.robot.systems.FSMSystem;
-import frc.robot.systems.AutoHandlerSystem;
-import frc.robot.systems.AutoHandlerSystem.AutoPath;
+import edu.wpi.first.wpilibj.PowerDistribution;
+import frc.robot.input.TeleopInput;
+import frc.robot.systems.DriveFSMSystem;
+import org.littletonrobotics.junction.LogFileUtil;
+import org.littletonrobotics.junction.LoggedRobot;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.NT4Publisher;
+import org.littletonrobotics.junction.wpilog.WPILOGReader;
+import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
  * each mode, as described in the TimedRobot documentation.
  */
-public class Robot extends TimedRobot {
+public class Robot extends LoggedRobot {
 	private TeleopInput input;
 
 	// Systems
-	private FSMSystem subSystem1;
-	private FSMSystem subSystem2;
-	private FSMSystem subSystem3;
-
-	private AutoHandlerSystem autoHandler;
+	private DriveFSMSystem driveSystem;
 
 	/**
 	 * This function is run when the robot is first started up and should be used for any
@@ -34,37 +35,48 @@ public class Robot extends TimedRobot {
 		System.out.println("robotInit");
 		input = new TeleopInput();
 
+		Logger.recordMetadata("2473", "MaxSwerve Bot");
+
+		// ==== Set Up Logging ==== //
+		if(isReal()) {
+			Logger.addDataReceiver(new NT4Publisher());
+			Logger.addDataReceiver(new WPILOGWriter());
+			new PowerDistribution(1, PowerDistribution.ModuleType.kRev);
+		} else if(isSimulation()) {
+			Logger.addDataReceiver(new NT4Publisher());
+		} else {
+			setUseTiming(false); // Run as fast as possible
+
+			var logPath = LogFileUtil.findReplayLog();
+			Logger.setReplaySource(new WPILOGReader(logPath));
+			Logger.addDataReceiver(new WPILOGWriter(LogFileUtil.addPathSuffix(logPath, "_replay")));
+		}
+		// ========================= //
+
+		Logger.start(); // Begin logging
+
 		// Instantiate all systems here
-		subSystem1 = new FSMSystem();
-		subSystem2 = new FSMSystem();
-		subSystem3 = new FSMSystem();
-		autoHandler = new AutoHandlerSystem(subSystem1, subSystem2, subSystem3);
+		if(HardwareMap.isDriveHardwarePresent()) {
+			driveSystem = new DriveFSMSystem();
+		}
 	}
 
 	@Override
 	public void autonomousInit() {
 		System.out.println("-------- Autonomous Init --------");
-		autoHandler.reset(AutoPath.PATH1);
 	}
 
 	@Override
 	public void autonomousPeriodic() {
-		autoHandler.update();
 	}
 
 	@Override
 	public void teleopInit() {
 		System.out.println("-------- Teleop Init --------");
-		subSystem1.reset();
-		subSystem2.reset();
-		subSystem3.reset();
 	}
 
 	@Override
 	public void teleopPeriodic() {
-		subSystem1.update(input);
-		subSystem2.update(input);
-		subSystem3.update(input);
 	}
 
 	@Override
@@ -83,9 +95,7 @@ public class Robot extends TimedRobot {
 	}
 
 	@Override
-	public void testPeriodic() {
-
-	}
+	public void testPeriodic() {}
 
 	/* Simulation mode handlers, only used for simulation testing  */
 	@Override
