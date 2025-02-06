@@ -36,12 +36,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
 			DriveConstants.DRIVE_KINEMATICS,
 			Rotation2d.fromDegrees(getHeading()),
-			new SwerveModulePosition[]{
-					frontLeft.getPosition(),
-					frontRight.getPosition(),
-					rearLeft.getPosition(),
-					rearRight.getPosition()
-			}
+			getModulePositions()
 	);
 
 	// Auto PIDS
@@ -83,6 +78,8 @@ public class DriveFSMSystem extends SubsystemBase {
 
 		gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
 
+		headingController.enableContinuousInput(-Math.PI, Math.PI);
+
 		// Reset state machine
 		reset();
 	}
@@ -120,6 +117,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	public void update(TeleopInput input) {
 		if(input == null) return;
 
+
 		switch (currentState) {
 			case TELEOP_STATE:
 				handleTeleopState(input);
@@ -129,6 +127,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		}
 
 		Logger.recordOutput("DriveFSM/Current State", currentState);
+		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", getModuleStates());
 
 		currentState = nextState(input);
 	}
@@ -194,7 +193,6 @@ public class DriveFSMSystem extends SubsystemBase {
 			xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())
 		));
 
-		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", getModuleStates());
 	}
 
 	public void followTrajectory(SwerveSample sample) {
@@ -206,11 +204,12 @@ public class DriveFSMSystem extends SubsystemBase {
 			sample.omega + headingController.calculate(pose.getRotation().getRadians(), sample.heading)
 		);
 
-		
+		drive(targetSpeeds); // I assume that these speeds are field relative, the choreo doc says to have a driveFieldRelative
 	}
 
 	/**
-	 * Drive the robot using the given chassis speeds. Robot relative
+	 * Drive the robot using the given chassis speeds. Robot relative or field relative depends on how
+	 * you pass in the speeds, see {@link ChassisSpeeds#fromFieldRelativeSpeeds(double, double, double, Rotation2d)}.
 	 * @param speeds Chassis speeds
 	 */
 	private void drive(ChassisSpeeds speeds) {
@@ -244,17 +243,48 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	/**
+	 * Set the swerve modules to an x formation to prevent any movement
+	 */
+	private void setX() {
+		setModuleStates(
+				new SwerveModuleState[]{
+						new SwerveModuleState(0, Rotation2d.fromDegrees(45)),
+						new SwerveModuleState(0, Rotation2d.fromDegrees(-45)),
+						new SwerveModuleState(0, Rotation2d.fromDegrees(-45)),
+						new SwerveModuleState(0, Rotation2d.fromDegrees(45))
+				}
+		);
+	}
+
+	/**
 	 * Zero the gyro heading.
 	 */
 	private void zeroHeading() {
 		gyro.zeroYaw();
 	}
 
+	private SwerveModulePosition[] getModulePositions() {
+		return new SwerveModulePosition[]{
+			frontLeft.getPosition(),
+			frontRight.getPosition(),
+			rearLeft.getPosition(),
+			rearRight.getPosition()
+		};
+	}
+
 	/**
 	 * Get the current pose of the robot.
 	 * @return Current pose of the robot
 	 */
-	private Pose2d getPose() {
+	public Pose2d getPose() {
 		return odometry.getPoseMeters();
+	}
+
+	public Pose2d resetOdometry(Pose2d pose) {
+		odometry.resetPosition(
+				Rotation2d.fromDegrees(getHeading()),
+				getModulePositions(),
+				pose
+		);
 	}
 }

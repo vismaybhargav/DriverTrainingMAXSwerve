@@ -6,6 +6,7 @@ package frc.robot;
 // WPILib Imports
 
 // Systems
+import choreo.auto.AutoFactory;
 import edu.wpi.first.wpilibj.PowerDistribution;
 import frc.robot.input.TeleopInput;
 import frc.robot.systems.DriveFSMSystem;
@@ -25,6 +26,7 @@ public class Robot extends LoggedRobot {
 
 	// Systems
 	private DriveFSMSystem driveSystem;
+	private AutoFactory autoFactory;
 
 	/**
 	 * This function is run when the robot is first started up and should be used for any
@@ -59,6 +61,15 @@ public class Robot extends LoggedRobot {
 		if(HardwareMap.isDriveHardwarePresent()) {
 			driveSystem = new DriveFSMSystem();
 		}
+
+		// TODO: Are we using this or the new architecture?
+		autoFactory = new AutoFactory(
+				driveSystem::getPose,
+				driveSystem::resetOdometry,
+				driveSystem::followTrajectory,
+				true,
+				driveSystem
+		);
 	}
 
 	@Override
