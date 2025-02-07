@@ -2,17 +2,20 @@ package frc.robot.systems;
 
 import choreo.trajectory.SwerveSample;
 import com.studica.frc.AHRS;
+
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+
 import frc.robot.Constants;
 import frc.robot.input.TeleopInput;
 import frc.robot.MAXSwerveModule;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.vision.RaspberryPi;
+
 import jdk.jshell.spi.ExecutionControl;
 import org.littletonrobotics.junction.Logger;
 
@@ -29,10 +32,10 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	// Hardware devices should be owned by one and only one system. They must
 	// be private to their owner system and may not be used elsewhere.
-	private MAXSwerveModule frontLeft;
-	private MAXSwerveModule frontRight;
-	private MAXSwerveModule rearLeft;
-	private MAXSwerveModule rearRight;
+	private final MAXSwerveModule frontLeft;
+	private final MAXSwerveModule frontRight;
+	private final MAXSwerveModule rearLeft;
+	private final MAXSwerveModule rearRight;
 	private final AHRS gyro;
 	private final RaspberryPi rpi;
 
@@ -121,13 +124,10 @@ public class DriveFSMSystem extends SubsystemBase {
 	public void update(TeleopInput input) {
 		if(input == null) return;
 
-
 		switch (currentState) {
-			case TELEOP_STATE:
-				handleTeleopState(input);
-				break;
-			default:
-				throw new IllegalStateException("Invalid state: " + currentState);
+			case TELEOP_STATE -> handleTeleopState(input);
+			case ALIGN_TO_TAG_STATE -> handleAlignToTagState();
+			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		}
 
 		Logger.recordOutput("DriveFSM/Current State", currentState);
@@ -155,12 +155,23 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @return FSM state for the next iteration
 	 */
 	private FSMState nextState(TeleopInput input) {
-		switch (currentState) {
-			case TELEOP_STATE:
-				return FSMState.TELEOP_STATE;
-			default:
-				throw new IllegalStateException("Invalid state: " + currentState);
-		}
+		return switch(currentState) {
+			case TELEOP_STATE -> {
+				if(input.getDriveControllerAlignToTagPressed()) {
+					yield FSMState.ALIGN_TO_TAG_STATE;
+				} else {
+					yield FSMState.TELEOP_STATE;
+				}
+			}
+			case ALIGN_TO_TAG_STATE -> {
+				if(!input.getDriveControllerAlignToTagPressed()) {
+					yield FSMState.TELEOP_STATE;
+				} else {
+					yield FSMState.ALIGN_TO_TAG_STATE;
+				}
+			}
+			default -> throw new IllegalStateException("Invalid state: " + currentState);
+        };
 	}
 
 	/* ------------------------ FSM state handlers ------------------------ */
@@ -177,16 +188,16 @@ public class DriveFSMSystem extends SubsystemBase {
 		// Calculate speeds
 		// Clamping the speeds here might be redundant as the kinematics should already do this.
 		var xSpeed = -MathUtil.applyDeadband(
-				xInput, Constants.OIConstants.kDriveDeadband
+				xInput, Constants.OIConstants.DRIVE_DEADBAND
 		) * DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
 
 		var ySpeed = -MathUtil.applyDeadband(
-				yInput, Constants.OIConstants.kDriveDeadband
+				yInput, Constants.OIConstants.DRIVE_DEADBAND
 		) * DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
 
 		// Rotational Speed
 		var aSpeed = -MathUtil.applyDeadband(
-				rotInput, Constants.OIConstants.kDriveDeadband
+				rotInput, Constants.OIConstants.DRIVE_DEADBAND
 		) * DriveConstants.MAX_ANGULAR_SPEED_RAD_PER_SEC / DriveConstants.SPEED_DAMP_FACTOR;
 
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/X-Speed", xSpeed);
@@ -201,6 +212,10 @@ public class DriveFSMSystem extends SubsystemBase {
 		if(input.getDriveControllerZeroHeadingPressed()) {
 			zeroHeading();
 		}
+	}
+
+	private void handleAlignToTagState() {
+
 	}
 
 	public void followTrajectory(SwerveSample sample) {
@@ -278,6 +293,9 @@ public class DriveFSMSystem extends SubsystemBase {
 			rearLeft.getPosition(),
 			rearRight.getPosition()
 		};
+	}
+
+	private void setDrivetrainBrake(boolean brake) {
 	}
 
 	/**
