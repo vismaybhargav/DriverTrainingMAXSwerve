@@ -7,6 +7,7 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
@@ -42,8 +43,13 @@ public class DriveFSMSystem extends SubsystemBase {
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
 			DriveConstants.DRIVE_KINEMATICS,
 			Rotation2d.fromDegrees(getHeading()),
-			getModulePositions()
-	);
+			getModulePositions());
+
+	private boolean tagPositionAligned = false;
+	private Translation2d alignmentTranslation2d = null;
+	private double rotationCache2d = 0;
+	private Rotation2d rotationAlignmentPose = new Rotation2d();
+	private int tagID = -1;
 
 	// Auto PIDS
 	private final PIDController xController = new PIDController(5, 0, 0);
@@ -59,28 +65,24 @@ public class DriveFSMSystem extends SubsystemBase {
 	public DriveFSMSystem() {
 		// Perform hardware init
 		frontLeft = new MAXSwerveModule(
-			DriveConstants.FRONT_LEFT_DRIVING_CAN_ID,
-			DriveConstants.FRONT_LEFT_TURNING_CAN_ID,
-			DriveConstants.FRONT_LEFT_CHASSIS_ANGULAR_OFFSET
-		);
+				DriveConstants.FRONT_LEFT_DRIVING_CAN_ID,
+				DriveConstants.FRONT_LEFT_TURNING_CAN_ID,
+				DriveConstants.FRONT_LEFT_CHASSIS_ANGULAR_OFFSET);
 
 		frontRight = new MAXSwerveModule(
-			DriveConstants.FRONT_RIGHT_DRIVING_CAN_ID,
-			DriveConstants.FRONT_RIGHT_TURNING_CAN_ID,
-			DriveConstants.FRONT_RIGHT_CHASSIS_ANGULAR_OFFSET
-		);
+				DriveConstants.FRONT_RIGHT_DRIVING_CAN_ID,
+				DriveConstants.FRONT_RIGHT_TURNING_CAN_ID,
+				DriveConstants.FRONT_RIGHT_CHASSIS_ANGULAR_OFFSET);
 
 		rearLeft = new MAXSwerveModule(
-			DriveConstants.REAR_LEFT_DRIVING_CAN_ID,
-			DriveConstants.REAR_LEFT_TURNING_CAN_ID,
-			DriveConstants.BACK_LEFT_CHASSIS_ANGULAR_OFFSET
-		);
+				DriveConstants.REAR_LEFT_DRIVING_CAN_ID,
+				DriveConstants.REAR_LEFT_TURNING_CAN_ID,
+				DriveConstants.BACK_LEFT_CHASSIS_ANGULAR_OFFSET);
 
 		rearRight = new MAXSwerveModule(
-			DriveConstants.REAR_RIGHT_DRIVING_CAN_ID,
-			DriveConstants.REAR_RIGHT_TURNING_CAN_ID,
-			DriveConstants.BACK_RIGHT_CHASSIS_ANGULAR_OFFSET
-		);
+				DriveConstants.REAR_RIGHT_DRIVING_CAN_ID,
+				DriveConstants.REAR_RIGHT_TURNING_CAN_ID,
+				DriveConstants.BACK_RIGHT_CHASSIS_ANGULAR_OFFSET);
 
 		gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
 		rpi = new RaspberryPi();
@@ -94,11 +96,13 @@ public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Public methods ======================== */
 	/**
 	 * Return current FSM state.
+	 * 
 	 * @return Current FSM state
 	 */
 	public FSMState getCurrentState() {
 		return currentState;
 	}
+
 	/**
 	 * Reset this system to its start state. This may be called from mode init
 	 * when the robot is enabled.
@@ -118,14 +122,24 @@ public class DriveFSMSystem extends SubsystemBase {
 	/**
 	 * Update FSM based on new inputs. This function only calls the FSM state
 	 * specific handlers.
+	 * 
 	 * @param input Global TeleopInput if robot in teleop mode or null if
-	 *        the robot is in autonomous mode.
+	 *              the robot is in autonomous mode.
 	 */
 	public void update(TeleopInput input) {
-		if(input == null) return;
+		if (input == null)
+			return;
 
 		switch (currentState) {
-			case TELEOP_STATE -> handleTeleopState(input);
+			case TELEOP_STATE -> {
+				// Reset all the auto logic when we go into the teleop state.
+				if (alignmentTranslation2d != null) {
+					alignmentTranslation2d = null;
+					rotationCache2d = 0;
+					tagPositionAligned = false;
+				}
+				handleTeleopState(input);
+			}
 			case ALIGN_TO_TAG_STATE -> handleAlignToTagState();
 			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		}
@@ -138,6 +152,7 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	/**
 	 * Performs specific action based on the autoState passed in.
+	 * 
 	 * @return if the action carried out in this state has finished executing
 	 */
 	public boolean updateAutonomous() throws ExecutionControl.NotImplementedException {
@@ -150,28 +165,29 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * and the current state of this FSM. This method should not have any side
 	 * effects on outputs. In other words, this method should only read or get
 	 * values to decide what state to go to.
+	 * 
 	 * @param input Global TeleopInput if robot in teleop mode or null if
-	 *        the robot is in autonomous mode.
+	 *              the robot is in autonomous mode.
 	 * @return FSM state for the next iteration
 	 */
 	private FSMState nextState(TeleopInput input) {
-		return switch(currentState) {
+		return switch (currentState) {
 			case TELEOP_STATE -> {
-				if(input.getDriveControllerAlignToTagPressed()) {
+				if (input.getDriveControllerAlignToTagPressed()) {
 					yield FSMState.ALIGN_TO_TAG_STATE;
 				} else {
 					yield FSMState.TELEOP_STATE;
 				}
 			}
 			case ALIGN_TO_TAG_STATE -> {
-				if(!input.getDriveControllerAlignToTagPressed()) {
+				if (!input.getDriveControllerAlignToTagPressed()) {
 					yield FSMState.TELEOP_STATE;
 				} else {
 					yield FSMState.ALIGN_TO_TAG_STATE;
 				}
 			}
 			default -> throw new IllegalStateException("Invalid state: " + currentState);
-        };
+		};
 	}
 
 	/* ------------------------ FSM state handlers ------------------------ */
@@ -186,19 +202,20 @@ public class DriveFSMSystem extends SubsystemBase {
 		Logger.recordOutput("DriveFSM/TeleOp/Inputs/A-Input", rotInput);
 
 		// Calculate speeds
-		// Clamping the speeds here might be redundant as the kinematics should already do this.
+		// Clamping the speeds here might be redundant as the kinematics should already
+		// do this.
 		var xSpeed = -MathUtil.applyDeadband(
-				xInput, Constants.OIConstants.DRIVE_DEADBAND
-		) * DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
+				xInput, Constants.OIConstants.DRIVE_DEADBAND)
+				* DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
 
 		var ySpeed = -MathUtil.applyDeadband(
-				yInput, Constants.OIConstants.DRIVE_DEADBAND
-		) * DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
+				yInput, Constants.OIConstants.DRIVE_DEADBAND)
+				* DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
 
 		// Rotational Speed
 		var aSpeed = -MathUtil.applyDeadband(
-				rotInput, Constants.OIConstants.DRIVE_DEADBAND
-		) * DriveConstants.MAX_ANGULAR_SPEED_RAD_PER_SEC / DriveConstants.SPEED_DAMP_FACTOR;
+				rotInput, Constants.OIConstants.DRIVE_DEADBAND)
+				* DriveConstants.MAX_ANGULAR_SPEED_RAD_PER_SEC / DriveConstants.SPEED_DAMP_FACTOR;
 
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/X-Speed", xSpeed);
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/Y-Speed", ySpeed);
@@ -206,33 +223,66 @@ public class DriveFSMSystem extends SubsystemBase {
 
 		// Calculate and send speeds
 		drive(ChassisSpeeds.fromFieldRelativeSpeeds(
-			xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())
-		));
+				xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
 
-		if(input.getDriveControllerZeroHeadingPressed()) {
+		if (input.getDriveControllerZeroHeadingPressed()) {
 			zeroHeading();
 		}
 	}
 
 	private void handleAlignToTagState() {
+		var tag = rpi.getAprilTagWithID(9);
 
+		if (tag != null && !tagPositionAligned) {
+			double rpiX = tag.getZ();
+			double rpiY = tag.getX();
+			double rpiTheta = tag.getPitch();
+
+			double xSpeed = Math.abs(rpiX) < Constants.VisionConstants.X_MARGIN_TO_REEF
+					? MAXSwerveModule.clamp(
+							rpiX / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
+							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
+							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
+					: 0;
+
+			double ySpeed = Math.abs(rpiY) < Constants.VisionConstants.Y_MARGIN_TO_REEF
+					? MAXSwerveModule.clamp(
+							rpiY / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
+							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
+							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
+					: 0;
+
+			double aSpeed = Math.abs(rpiTheta) < Constants.VisionConstants.ROT_MARGIN_TO_REEF
+					? MAXSwerveModule.clamp(
+							rpiTheta / Constants.VisionConstants.ROTATIONAL_ACCEL_CONSTANT,
+							-Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND,
+							Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND)
+					: 0;
+
+			drive(ChassisSpeeds.fromFieldRelativeSpeeds(
+					xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
+		}
 	}
 
 	public void followTrajectory(SwerveSample sample) {
 		var pose = getPose();
 
 		var targetSpeeds = new ChassisSpeeds(
-			sample.vx + xController.calculate(pose.getX(), sample.x),
-			sample.vy + yController.calculate(pose.getY(), sample.y),
-			sample.omega + headingController.calculate(pose.getRotation().getRadians(), sample.heading)
-		);
+				sample.vx + xController.calculate(pose.getX(), sample.x),
+				sample.vy + yController.calculate(pose.getY(), sample.y),
+				sample.omega + headingController.calculate(pose.getRotation().getRadians(),
+						sample.heading));
 
-		drive(targetSpeeds); // I assume that these speeds are field relative, the choreo doc says to have a driveFieldRelative
+		drive(targetSpeeds); // I assume that these speeds are field relative, the choreo doc says to have a
+					// driveFieldRelative
 	}
 
 	/**
-	 * Drive the robot using the given chassis speeds. Robot relative or field relative depends on how
-	 * you pass in the speeds, see {@link ChassisSpeeds#fromFieldRelativeSpeeds(double, double, double, Rotation2d)}.
+	 * Drive the robot using the given chassis speeds. Robot relative or field
+	 * relative depends on how
+	 * you pass in the speeds, see
+	 * {@link ChassisSpeeds#fromFieldRelativeSpeeds(double, double, double, Rotation2d)}.
+	 * 
 	 * @param speeds Chassis speeds
 	 */
 	private void drive(ChassisSpeeds speeds) {
@@ -249,16 +299,17 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	private SwerveModuleState[] getModuleStates() {
-		var swerveStates = new SwerveModuleState[4];
-		swerveStates[0] = frontLeft.getState();
-		swerveStates[1] = frontRight.getState();
-		swerveStates[2] = rearLeft.getState();
-		swerveStates[3] = rearRight.getState();
-		return swerveStates;
+		return new SwerveModuleState[] {
+				frontLeft.getState(),
+				frontRight.getState(),
+				rearLeft.getState(),
+				rearRight.getState()
+		};
 	}
 
 	/**
 	 * Get the current gyro heading in degrees.
+	 * 
 	 * @return Current gyro heading in degrees
 	 */
 	private double getHeading() {
@@ -270,13 +321,12 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	private void setX() {
 		setModuleStates(
-				new SwerveModuleState[]{
+				new SwerveModuleState[] {
 						new SwerveModuleState(0, Rotation2d.fromDegrees(45)),
 						new SwerveModuleState(0, Rotation2d.fromDegrees(-45)),
 						new SwerveModuleState(0, Rotation2d.fromDegrees(-45)),
 						new SwerveModuleState(0, Rotation2d.fromDegrees(45))
-				}
-		);
+				});
 	}
 
 	/**
@@ -287,19 +337,17 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	private SwerveModulePosition[] getModulePositions() {
-		return new SwerveModulePosition[]{
-			frontLeft.getPosition(),
-			frontRight.getPosition(),
-			rearLeft.getPosition(),
-			rearRight.getPosition()
+        return new SwerveModulePosition[] {
+				frontLeft.getPosition(),
+				frontRight.getPosition(),
+				rearLeft.getPosition(),
+				rearRight.getPosition()
 		};
-	}
-
-	private void setDrivetrainBrake(boolean brake) {
 	}
 
 	/**
 	 * Get the current pose of the robot.
+	 * 
 	 * @return Current pose of the robot
 	 */
 	public Pose2d getPose() {
@@ -310,7 +358,6 @@ public class DriveFSMSystem extends SubsystemBase {
 		odometry.resetPosition(
 				Rotation2d.fromDegrees(getHeading()),
 				getModulePositions(),
-				pose
-		);
+				pose);
 	}
 }
