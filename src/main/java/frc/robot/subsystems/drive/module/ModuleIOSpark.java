@@ -11,9 +11,10 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU General Public License for more details.
 
-package frc.robot.subsystems.drive;
+package frc.robot.subsystems.drive.module;
 
-import static frc.robot.subsystems.drive.DriveConstants.*;
+import static frc.robot.Constants.DriveConstants.*;
+import static frc.robot.Constants.ModuleConstants.*;
 import static frc.robot.util.SparkUtil.*;
 
 import com.revrobotics.AbsoluteEncoder;
@@ -35,6 +36,8 @@ import com.revrobotics.spark.config.SparkMaxConfig;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.filter.Debouncer;
 import edu.wpi.first.math.geometry.Rotation2d;
+import frc.robot.subsystems.drive.SparkOdometryThread;
+
 import java.util.Queue;
 import java.util.function.DoubleSupplier;
 
@@ -71,21 +74,21 @@ public class ModuleIOSpark implements ModuleIO {
             case 2 -> backLeftZeroRotation;
             case 3 -> backRightZeroRotation;
             default -> new Rotation2d();};
-        driveSpark = new SparkFlex(
+        driveSpark = new SparkMax(
                 switch (module) {
-                    case 0 -> frontLeftDriveCanId;
-                    case 1 -> frontRightDriveCanId;
-                    case 2 -> backLeftDriveCanId;
-                    case 3 -> backRightDriveCanId;
+                    case 0 -> frontLeftDrivingCanId;
+                    case 1 -> frontRightDrivingCanId;
+                    case 2 -> rearLeftDrivingCanId;
+                    case 3 -> rearRightDrivingCanId;
                     default -> 0;
                 },
                 MotorType.kBrushless);
         turnSpark = new SparkMax(
                 switch (module) {
-                    case 0 -> frontLeftTurnCanId;
-                    case 1 -> frontRightTurnCanId;
-                    case 2 -> backLeftTurnCanId;
-                    case 3 -> backRightTurnCanId;
+                    case 0 -> frontLeftTurningCanId;
+                    case 1 -> frontRightTurningCanId;
+                    case 2 -> rearLeftTurningCanId;
+                    case 3 -> rearRightTurningCanId;
                     default -> 0;
                 },
                 MotorType.kBrushless);
@@ -98,7 +101,7 @@ public class ModuleIOSpark implements ModuleIO {
         var driveConfig = new SparkFlexConfig();
         driveConfig
                 .idleMode(IdleMode.kBrake)
-                .smartCurrentLimit(driveMotorCurrentLimit)
+                .smartCurrentLimit(drivingCurrentLimitAmps)
                 .voltageCompensation(12.0);
         driveConfig
                 .encoder

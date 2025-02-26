@@ -8,6 +8,14 @@ import edu.wpi.first.hal.FRCNetComm.tInstances;
 import edu.wpi.first.hal.FRCNetComm.tResourceType;
 
 import frc.robot.subsystems.MAXSwerveModule;
+import frc.robot.subsystems.drive.gyro.GyroIO;
+import frc.robot.subsystems.drive.module.ModuleIO;
+import frc.robot.subsystems.drive.module.Module;
+
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
+
 import org.littletonrobotics.junction.Logger;
 
 import com.studica.frc.AHRS;
@@ -25,35 +33,23 @@ import frc.robot.Constants.DriveConstants;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 public class DriveSubsystem extends SubsystemBase {
+  // Gyro
+  private final GyroIO gyro;
+  private final GyroIOInputsAutoLogged gyroInputs = new GyroIOInputsAutoLogged();
+
   // Create MAXSwerveModules
-  private final MAXSwerveModule m_frontLeft = new MAXSwerveModule(
-      DriveConstants.kFrontLeftDrivingCanId,
-      DriveConstants.kFrontLeftTurningCanId,
-      DriveConstants.kFrontLeftChassisAngularOffset);
-
-  private final MAXSwerveModule m_frontRight = new MAXSwerveModule(
-      DriveConstants.kFrontRightDrivingCanId,
-      DriveConstants.kFrontRightTurningCanId,
-      DriveConstants.kFrontRightChassisAngularOffset);
-
-  private final MAXSwerveModule m_rearLeft = new MAXSwerveModule(
-      DriveConstants.kRearLeftDrivingCanId,
-      DriveConstants.kRearLeftTurningCanId,
-      DriveConstants.kBackLeftChassisAngularOffset);
-
-  private final MAXSwerveModule m_rearRight = new MAXSwerveModule(
-      DriveConstants.kRearRightDrivingCanId,
-      DriveConstants.kRearRightTurningCanId,
-      DriveConstants.kBackRightChassisAngularOffset);
+  private final Module[] modules = new Module[4]; // FL, FR, BL, BR
 
   private final SwerveModuleState[] swerveModuleStates = new SwerveModuleState[4];
 
   // The gyro sensor
   private final AHRS m_gyro = new AHRS(NavXComType.kMXP_SPI);
 
+  static final Lock odometryLock = new ReentrantLock();
+
   // Odometry class for tracking robot pose
   SwerveDriveOdometry m_odometry = new SwerveDriveOdometry(
-      DriveConstants.kDriveKinematics,
+      DriveConstants.driveKinematics,
       Rotation2d.fromDegrees(getGyroAngle()),
       new SwerveModulePosition[] {
           m_frontLeft.getPosition(),
@@ -63,9 +59,25 @@ public class DriveSubsystem extends SubsystemBase {
       });
 
   /** Creates a new DriveSubsystem. */
-  public DriveSubsystem() {
+  public DriveSubsystem(
+    GyroIO gyro,
+    ModuleIO flModule,
+    ModuleIO frModule,
+    ModuleIO blModule,
+    ModuleIO brModule,
+    Consumer<Pose2d> resetSimulationPoseCallback
+  ) {
+    this.gyro = gyro;
+    modules[0] = new Module(flModule, 0);
+    modules[1] = new Module(frModule, 1);
+    modules[2] = new Module(blModule, 2);
+    modules[3] = new Module(brModule, 3);
+
     // Usage reporting for MAXSwerve template
     HAL.report(tResourceType.kResourceType_RobotDrive, tInstances.kRobotDriveSwerve_MaxSwerve);
+
+    SparkOdometryThread.getInstance().start();
+
     updateSwerveModuleStates();
   }
 
@@ -75,10 +87,10 @@ public class DriveSubsystem extends SubsystemBase {
     m_odometry.update(
         Rotation2d.fromDegrees(getGyroAngle()),
         new SwerveModulePosition[] {
-            m_frontLeft.getPosition(),
-            m_frontRight.getPosition(),
-            m_rearLeft.getPosition(),
-            m_rearRight.getPosition()
+            modules[0].getPosition(),
+            modules[1].getPosition(),
+            modules[2].getPosition(),
+            modules[3].getPosition()
         });
       updateSwerveModuleStates();
   }
@@ -101,10 +113,10 @@ public class DriveSubsystem extends SubsystemBase {
     m_odometry.resetPosition(
         Rotation2d.fromDegrees(getGyroAngle()),
         new SwerveModulePosition[] {
-            m_frontLeft.getPosition(),
-            m_frontRight.getPosition(),
-            m_rearLeft.getPosition(),
-            m_rearRight.getPosition()
+            modules[0].getPosition(),
+            modules[1].getPosition(),
+            modules[2].getPosition(),
+            modules[3].getPosition()
         },
         pose);
   }
@@ -120,15 +132,15 @@ public class DriveSubsystem extends SubsystemBase {
    */
   public void drive(double xSpeed, double ySpeed, double rot, boolean fieldRelative) {
     // Convert the commanded speeds into the correct units for the drivetrain
-    double xSpeedDelivered = xSpeed * DriveConstants.kMaxSpeedMetersPerSecond;
-    double ySpeedDelivered = ySpeed * DriveConstants.kMaxSpeedMetersPerSecond;
-    double rotDelivered = rot * DriveConstants.kMaxAngularSpeed;
+    double xSpeedDelivered = xSpeed * DriveConstants.maxSpeedMetersPerSecond;
+    double ySpeedDelivered = ySpeed * DriveConstants.maxSpeedMetersPerSecond;
+    double rotDelivered = rot * DriveConstants.maxAngularSpeed;
 
     Logger.recordOutput("xSpeedDelivered", xSpeedDelivered);
     Logger.recordOutput("ySpeedDelivered", ySpeedDelivered);
     Logger.recordOutput("rotDelivered", rotDelivered);
 
-    var swerveModuleStates = DriveConstants.kDriveKinematics.toSwerveModuleStates(
+    var swerveModuleStates = DriveConstants.driveKinematics.toSwerveModuleStates(
         fieldRelative
             ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeedDelivered, ySpeedDelivered, rotDelivered,
                 Rotation2d.fromDegrees(getGyroAngle()))
@@ -141,10 +153,10 @@ public class DriveSubsystem extends SubsystemBase {
    * Sets the wheels into an X formation to prevent movement.
    */
   public void setX() {
-    m_frontLeft.setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(45)));
-    m_frontRight.setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(-45)));
-    m_rearLeft.setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(-45)));
-    m_rearRight.setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(45)));
+    modules[0].setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(45)));
+    modules[1].setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(-45)));
+    modules[2].setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(-45)));
+    modules[3].setDesiredState(new SwerveModuleState(0, Rotation2d.fromDegrees(45)));
   }
 
   /**
@@ -154,19 +166,19 @@ public class DriveSubsystem extends SubsystemBase {
    */
   public void setModuleStates(SwerveModuleState[] desiredStates) {
     SwerveDriveKinematics.desaturateWheelSpeeds(
-        desiredStates, DriveConstants.kMaxSpeedMetersPerSecond);
-    m_frontLeft.setDesiredState(desiredStates[0]);
-    m_frontRight.setDesiredState(desiredStates[1]);
-    m_rearLeft.setDesiredState(desiredStates[2]);
-    m_rearRight.setDesiredState(desiredStates[3]);
+        desiredStates, DriveConstants.maxSpeedMetersPerSecond);
+    modules[0].setDesiredState(desiredStates[0]);
+    modules[1].setDesiredState(desiredStates[1]);
+    modules[2].setDesiredState(desiredStates[2]);
+    modules[3].setDesiredState(desiredStates[3]);
   }
 
   /** Resets the drive encoders to currently read a position of 0. */
   public void resetEncoders() {
-    m_frontLeft.resetEncoders();
-    m_rearLeft.resetEncoders();
-    m_frontRight.resetEncoders();
-    m_rearRight.resetEncoders();
+    modules[0].resetEncoders();
+    modules[1].resetEncoders();
+    modules[2].resetEncoders();
+    modules[3].resetEncoders();
   }
 
   /** Zeroes the heading of the robot. */
@@ -196,7 +208,7 @@ public class DriveSubsystem extends SubsystemBase {
    * @return The turn rate of the robot, in degrees per second
    */
   public double getTurnRate() {
-    return m_gyro.getRate() * (DriveConstants.kGyroReversed ? -1.0 : 1.0);
+    return m_gyro.getRate() * (DriveConstants.gyroReversed ? -1.0 : 1.0);
   }
 
   public SwerveModuleState[] getSwerveStates() {
@@ -204,9 +216,9 @@ public class DriveSubsystem extends SubsystemBase {
   }
 
   public void updateSwerveModuleStates() {
-    swerveModuleStates[0] = m_frontLeft.getState();
-    swerveModuleStates[1] = m_frontLeft.getState();
-    swerveModuleStates[2] = m_frontLeft.getState();
-    swerveModuleStates[3] = m_frontLeft.getState();
+    swerveModuleStates[0] = modules[0].getState();
+    swerveModuleStates[1] = modules[1].getState();
+    swerveModuleStates[2] = modules[2].getState();
+    swerveModuleStates[3] = modules[3].getState();
   }
 }

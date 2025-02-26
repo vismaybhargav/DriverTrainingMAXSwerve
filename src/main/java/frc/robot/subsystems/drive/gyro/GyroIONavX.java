@@ -3,6 +3,9 @@ package frc.robot.subsystems.drive.gyro;
 import com.studica.frc.AHRS;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.util.Units;
+import frc.robot.subsystems.drive.SparkOdometryThread;
+
+import static frc.robot.Constants.DriveConstants.odometryFrequency;
 
 import java.util.Queue;
 

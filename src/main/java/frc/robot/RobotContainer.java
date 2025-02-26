@@ -26,7 +26,7 @@ public class RobotContainer {
   private final DriveSubsystem m_robotDrive = new DriveSubsystem();
 
   // The driver's controller
-  CommandPS4Controller m_driverController = new CommandPS4Controller(OIConstants.kDriverControllerPort);
+  CommandPS4Controller m_driverController = new CommandPS4Controller(OIConstants.driverControllerPort);
 
   /**
    * The container for the robot. Contains subsystems, OI devices, and commands.
@@ -41,9 +41,9 @@ public class RobotContainer {
         // Turning is controlled by the X axis of the right stick.
         new RunCommand(
             () -> m_robotDrive.drive(
-                -MathUtil.applyDeadband(m_driverController.getLeftY(), OIConstants.kDriveDeadband),
-                -MathUtil.applyDeadband(m_driverController.getLeftX(), OIConstants.kDriveDeadband),
-                -MathUtil.applyDeadband(m_driverController.getRightX(), OIConstants.kDriveDeadband),
+                -MathUtil.applyDeadband(m_driverController.getLeftY(), OIConstants.driveDeadband),
+                -MathUtil.applyDeadband(m_driverController.getLeftX(), OIConstants.driveDeadband),
+                -MathUtil.applyDeadband(m_driverController.getRightX(), OIConstants.driveDeadband),
                 true),
             m_robotDrive));
   }
@@ -67,8 +67,8 @@ public class RobotContainer {
     Logger.recordOutput("Pose", m_robotDrive.getPose());
     Logger.recordOutput("Heading", m_robotDrive.getHeading());
     Logger.recordOutput("Swerve States", m_robotDrive.getSwerveStates());
-    Logger.recordOutput("X-Input", -MathUtil.applyDeadband(m_driverController.getLeftY(), OIConstants.kDriveDeadband));
-    Logger.recordOutput("Y-Input", -MathUtil.applyDeadband(m_driverController.getLeftX(), OIConstants.kDriveDeadband));
-    Logger.recordOutput("A-Input", -MathUtil.applyDeadband(m_driverController.getRightX(), OIConstants.kDriveDeadband));
+    Logger.recordOutput("X-Input", -MathUtil.applyDeadband(m_driverController.getLeftY(), OIConstants.driveDeadband));
+    Logger.recordOutput("Y-Input", -MathUtil.applyDeadband(m_driverController.getLeftX(), OIConstants.driveDeadband));
+    Logger.recordOutput("A-Input", -MathUtil.applyDeadband(m_driverController.getRightX(), OIConstants.driveDeadband));
   }
 }
