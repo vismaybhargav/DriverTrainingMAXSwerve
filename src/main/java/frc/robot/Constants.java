@@ -10,6 +10,13 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import org.ironmaple.simulation.drivesims.COTS;
+import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
+import org.ironmaple.simulation.drivesims.configs.SwerveModuleSimulationConfig;
+
+import static edu.wpi.first.units.Units.*;
+import static frc.robot.Constants.ModuleConstants.turnGearbox;
+import static frc.robot.Constants.ModuleConstants.turnMotorReduction;
 
 /**
  * The Constants class provides a convenient place for teams to hold robot-wide
@@ -24,6 +31,22 @@ import edu.wpi.first.math.util.Units;
  * constants are needed, to reduce verbosity.
  */
 public final class Constants {
+  public static final class SimConstants {
+    public static final DriveTrainSimulationConfig mapleSimConfig = DriveTrainSimulationConfig.Default()
+            .withCustomModuleTranslations(DriveConstants.moduleTranslations)
+            .withRobotMass(Kilogram.of(DriveConstants.robotMassKg))
+            .withGyro(COTS.ofPigeon2())
+            .withSwerveModule(new SwerveModuleSimulationConfig(
+                    ModuleConstants.driveGearbox,
+                    turnGearbox,
+                    ModuleConstants.driveMotorReduction,
+                    turnMotorReduction,
+                    Volts.of(0.1),
+                    Volts.of(0.1),
+                    Meters.of(ModuleConstants.wheelRadiusMeters),
+                    KilogramSquareMeters.of(0.02),
+                    ModuleConstants.wheelCOF));
+  }
   public static final class DriveConstants {
     // Driving Parameters - Note that these are not the maximum capable speeds of
     // the robot, rather the allowed maximum speeds
@@ -36,12 +59,19 @@ public final class Constants {
     public static final double trackWidth = Units.inchesToMeters(22.5);
     // Distance between centers of right and left wheels on robot
     public static final double wheelBase = Units.inchesToMeters(22.75);
+
+    public static final double robotMassKg = 45;
+
+    public static final double driveBaseRadius = Math.hypot(trackWidth / 2.0, wheelBase / 2.0);
     // Distance between front and back wheels on robot
-    public static final SwerveDriveKinematics driveKinematics = new SwerveDriveKinematics(
+    public static final Translation2d[] moduleTranslations = new Translation2d[] {
         new Translation2d(wheelBase / 2, trackWidth / 2),
         new Translation2d(wheelBase / 2, -trackWidth / 2),
         new Translation2d(-wheelBase / 2, trackWidth / 2),
-        new Translation2d(-wheelBase / 2, -trackWidth / 2));
+        new Translation2d(-wheelBase / 2, -trackWidth / 2)
+    };
+
+    public static final SwerveDriveKinematics driveKinematics = new SwerveDriveKinematics(moduleTranslations);
 
     // Zeroed rotation values for each module, see setup instructions
     public static final Rotation2d frontLeftZeroRotation = new Rotation2d(0.0);
@@ -141,6 +171,8 @@ public final class Constants {
     public static final boolean turnEncoderInverted = true;
     public static final double turnEncoderPositionFactor = 2 * Math.PI; // Rotations -> Radians
     public static final double turnEncoderVelocityFactor = (2 * Math.PI) / 60.0; // RPM -> Rad/Sec
+
+    public static final double wheelCOF = 1.2;
   }
 
   public static final class OIConstants {
