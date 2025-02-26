@@ -233,4 +233,8 @@ public class ModuleIOSpark implements ModuleIO {
                 MathUtil.inputModulus(rotation.plus(zeroRotation).getRadians(), turnPIDMinInput, turnPIDMaxInput);
         turnController.setReference(setpoint, ControlType.kPosition);
     }
+
+    public void resetEncoders() {
+
+    }
 }
