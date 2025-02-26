@@ -4,6 +4,7 @@
 
 package frc.robot;
 
+import edu.wpi.first.wpilibj.Threads;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -66,17 +67,22 @@ public class Robot extends LoggedRobot {
    */
   @Override
   public void robotPeriodic() {
+    Threads.setCurrentThreadPriority(true, 99);
+
     // Runs the Scheduler.  This is responsible for polling buttons, adding newly-scheduled
     // commands, running already-scheduled commands, removing finished or interrupted commands,
     // and running subsystem periodic() methods.  This must be called from the robot's periodic
     // block in order for anything in the Command-based framework to work.
     CommandScheduler.getInstance().run();
-    m_robotContainer.updateOutputs();
+
+    Threads.setCurrentThreadPriority(false, 10);
   }
 
   /** This function is called once each time the robot enters Disabled mode. */
   @Override
-  public void disabledInit() {}
+  public void disabledInit() {
+    m_robotContainer.resetSimulationField();
+  }
 
   @Override
   public void disabledPeriodic() {}
@@ -128,5 +134,7 @@ public class Robot extends LoggedRobot {
   public void testPeriodic() {}
 
   @Override
-  public void simulationPeriodic() {}
+  public void simulationPeriodic() {
+    m_robotContainer.updateSimulation();
+  }
 }
