@@ -127,13 +127,13 @@ public class DriveSubsystem extends SubsystemBase {
     Logger.recordOutput("ySpeedDelivered", ySpeedDelivered);
     Logger.recordOutput("rotDelivered", rotDelivered);
 
-    var swerveModuleStates = DriveConstants.kDriveKinematics.toSwerveModuleStates(
-        fieldRelative
-            ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeedDelivered, ySpeedDelivered, rotDelivered,
-                Rotation2d.fromDegrees(getGyroAngle()))
-            : new ChassisSpeeds(xSpeedDelivered, ySpeedDelivered, rotDelivered));
+    ChassisSpeeds speeds = fieldRelative
+      ? ChassisSpeeds.fromFieldRelativeSpeeds(xSpeedDelivered, ySpeedDelivered, rotDelivered, Rotation2d.fromDegrees(getGyroAngle()))
+      : new ChassisSpeeds(xSpeedDelivered, ySpeedDelivered, rotDelivered);
 
-    setModuleStates(swerveModuleStates);
+    speeds = ChassisSpeeds.discretize(speeds, 0.02);
+
+    setModuleStates(DriveConstants.kDriveKinematics.toSwerveModuleStates(speeds));
   }
 
   /**
