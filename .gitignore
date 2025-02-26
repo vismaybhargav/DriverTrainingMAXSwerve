@@ -11,6 +11,8 @@
 *.o
 *.obj
 
+simgui-ds.json
+
 # Precompiled Headers
 *.gch
 *.pch
