@@ -27,6 +27,7 @@ import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
+import frc.robot.QuestNav;
 import frc.robot.Robot;
 import frc.robot.subsystems.drive.module.*;
 import frc.robot.subsystems.drive.module.Module;
@@ -47,6 +48,7 @@ public class DriveSubsystem extends SubsystemBase {
             new Alert("Disconnected gyro, using kinematics as fallback.", AlertType.kError);
 
     private Rotation2d rawGyroRotation = new Rotation2d();
+
     private final SwerveModulePosition[] lastModulePositions = // For delta tracking
             new SwerveModulePosition[] {
                 new SwerveModulePosition(),
@@ -55,10 +57,12 @@ public class DriveSubsystem extends SubsystemBase {
                 new SwerveModulePosition()
             };
 
+    private QuestNav questNav = new QuestNav();
+
     private final SwerveDrivePoseEstimator poseEstimator =
             new SwerveDrivePoseEstimator(
                     driveKinematics,
-                    rawGyroRotation,
+                    questNav.getPose().getRotation(),
                     lastModulePositions,
                     new Pose2d()
             );
@@ -90,6 +94,8 @@ public class DriveSubsystem extends SubsystemBase {
 
         // Start odometry thread
         SparkOdometryThread.getInstance().start();
+
+        questNav.zeroHeading();
     }
 
     @Override
@@ -148,8 +154,13 @@ public class DriveSubsystem extends SubsystemBase {
                         modulePositions
                 );
             } else {
-                odometry.update(rawGyroRotation, modulePositions);
+              odometry.update(
+                questNav.getPose().getRotation(), 
+                lastModulePositions);
             }
+
+            Logger.recordOutput("Oculus Position", questNav.getPose());
+            Logger.recordOutput("Oculus Quaternion", questNav.getQuaternion());
         }
 
         // Update gyro alert
@@ -262,9 +273,9 @@ public class DriveSubsystem extends SubsystemBase {
     /** Resets the current odometry pose. */
     public void resetOdometry(Pose2d pose) {
         resetSimulationPoseCallBack.accept(pose);
-
+        questNav.zeroPosition();
         if(useOdometry) {
-            odometry.resetPosition(getRotation(), getModulePositions(), pose);
+            odometry.resetPosition(questNav.getPose().getRotation(), getModulePositions(), pose);
         } else {
             poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
         }
@@ -279,5 +290,9 @@ public class DriveSubsystem extends SubsystemBase {
     /** Returns the maximum angular speed in radians per sec. */
     public double getMaxAngularSpeedRadPerSec() {
         return maxSpeedMetersPerSecond / driveBaseRadius;
+    }
+
+    public void cleanUpQuestNavMessages() {
+      questNav.cleanUpQuestNavMessages();
     }
 }

@@ -76,6 +76,8 @@ public class Robot extends LoggedRobot {
     CommandScheduler.getInstance().run();
 
     Threads.setCurrentThreadPriority(false, 10);
+
+    m_robotContainer.m_robotDrive.cleanUpQuestNavMessages();
   }
 
   /** This function is called once each time the robot enters Disabled mode. */
