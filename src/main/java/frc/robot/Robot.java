@@ -61,15 +61,6 @@ public class Robot extends LoggedRobot {
 		if(HardwareMap.isDriveHardwarePresent()) {
 			driveSystem = new DriveFSMSystem();
 		}
-
-		// TODO: Are we using this or the new architecture?
-		autoFactory = new AutoFactory(
-				driveSystem::getPose,
-				driveSystem::resetOdometry,
-				driveSystem::followTrajectory,
-				true,
-				driveSystem
-		);
 	}
 
 	@Override

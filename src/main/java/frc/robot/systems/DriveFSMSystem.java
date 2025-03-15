@@ -13,19 +13,23 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
 import frc.robot.input.TeleopInput;
-import frc.robot.MAXSwerveModule;
+import frc.robot.systems.drive.gyro.GyroIO;
+import frc.robot.systems.drive.module.ModuleIO;
+import frc.robot.systems.drive.module.Module;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.vision.RaspberryPi;
 
 import jdk.jshell.spi.ExecutionControl;
 import org.littletonrobotics.junction.Logger;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
 public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
 	// FSM state definitions
 	public enum FSMState {
 		TELEOP_STATE,
-		ALIGN_TO_TAG_STATE
 	}
 
 	/* ======================== Private variables ======================== */
@@ -33,11 +37,14 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	// Hardware devices should be owned by one and only one system. They must
 	// be private to their owner system and may not be used elsewhere.
-	private final MAXSwerveModule frontLeft;
-	private final MAXSwerveModule frontRight;
-	private final MAXSwerveModule rearLeft;
-	private final MAXSwerveModule rearRight;
-	private final AHRS gyro;
+	private final Module frontLeft;
+	private final Module frontRight;
+	private final Module rearLeft;
+	private final Module rearRight;
+
+	public static final Lock odometryLock = new ReentrantLock();
+
+	private final GyroIO gyro;
 	private final RaspberryPi rpi;
 
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
@@ -45,49 +52,27 @@ public class DriveFSMSystem extends SubsystemBase {
 			Rotation2d.fromDegrees(getHeading()),
 			getModulePositions());
 
-	private boolean tagPositionAligned = false;
-	private Translation2d alignmentTranslation2d = null;
-	private double rotationCache2d = 0;
-	private Rotation2d rotationAlignmentPose = new Rotation2d();
-	private int tagID = -1;
-
-	// Auto PIDS
-	private final PIDController xController = new PIDController(5, 0, 0);
-	private final PIDController yController = new PIDController(5, 0, 0);
-	private final PIDController headingController = new PIDController(0.75, 0, 0);
-
 	/* ======================== Constructor ======================== */
 	/**
 	 * Create FSMSystem and initialize to starting state. Also perform any
 	 * one-time initialization or configuration of hardware required. Note
 	 * the constructor is called only once when the robot boots.
 	 */
-	public DriveFSMSystem() {
+	public DriveFSMSystem(
+		GyroIO gyro,
+		ModuleIO frontLeftIO,
+		ModuleIO frontRightIO,
+		ModuleIO rearLeftIO,
+		ModuleIO rearRightIO
+	) {
 		// Perform hardware init
-		frontLeft = new MAXSwerveModule(
-				DriveConstants.FRONT_LEFT_DRIVING_CAN_ID,
-				DriveConstants.FRONT_LEFT_TURNING_CAN_ID,
-				DriveConstants.FRONT_LEFT_CHASSIS_ANGULAR_OFFSET);
+		frontLeft = new Module(frontLeftIO, 0);
+		frontRight = new Module(frontRightIO, 1);
+		rearLeft = new Module(rearLeftIO, 2);
+		rearRight = new Module(rearRightIO, 3);
 
-		frontRight = new MAXSwerveModule(
-				DriveConstants.FRONT_RIGHT_DRIVING_CAN_ID,
-				DriveConstants.FRONT_RIGHT_TURNING_CAN_ID,
-				DriveConstants.FRONT_RIGHT_CHASSIS_ANGULAR_OFFSET);
-
-		rearLeft = new MAXSwerveModule(
-				DriveConstants.REAR_LEFT_DRIVING_CAN_ID,
-				DriveConstants.REAR_LEFT_TURNING_CAN_ID,
-				DriveConstants.BACK_LEFT_CHASSIS_ANGULAR_OFFSET);
-
-		rearRight = new MAXSwerveModule(
-				DriveConstants.REAR_RIGHT_DRIVING_CAN_ID,
-				DriveConstants.REAR_RIGHT_TURNING_CAN_ID,
-				DriveConstants.BACK_RIGHT_CHASSIS_ANGULAR_OFFSET);
-
-		gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
+		this.gyro = gyro;
 		rpi = new RaspberryPi();
-
-		headingController.enableContinuousInput(-Math.PI, Math.PI);
 
 		// Reset state machine
 		reset();
@@ -133,14 +118,8 @@ public class DriveFSMSystem extends SubsystemBase {
 		switch (currentState) {
 			case TELEOP_STATE -> {
 				// Reset all the auto logic when we go into the teleop state.
-				if (alignmentTranslation2d != null) {
-					alignmentTranslation2d = null;
-					rotationCache2d = 0;
-					tagPositionAligned = false;
-				}
 				handleTeleopState(input);
 			}
-			case ALIGN_TO_TAG_STATE -> handleAlignToTagState();
 			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		}
 
@@ -173,18 +152,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	private FSMState nextState(TeleopInput input) {
 		return switch (currentState) {
 			case TELEOP_STATE -> {
-				if (input.getDriveControllerAlignToTagPressed()) {
-					yield FSMState.ALIGN_TO_TAG_STATE;
-				} else {
-					yield FSMState.TELEOP_STATE;
-				}
-			}
-			case ALIGN_TO_TAG_STATE -> {
-				if (!input.getDriveControllerAlignToTagPressed()) {
-					yield FSMState.TELEOP_STATE;
-				} else {
-					yield FSMState.ALIGN_TO_TAG_STATE;
-				}
+				yield FSMState.TELEOP_STATE;	
 			}
 			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		};
@@ -230,53 +198,6 @@ public class DriveFSMSystem extends SubsystemBase {
 		}
 	}
 
-	private void handleAlignToTagState() {
-		var tag = rpi.getAprilTagWithID(9);
-
-		if (tag != null && !tagPositionAligned) {
-			double rpiX = tag.getZ();
-			double rpiY = tag.getX();
-			double rpiTheta = tag.getPitch();
-
-			double xSpeed = Math.abs(rpiX) < Constants.VisionConstants.X_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiX / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
-					: 0;
-
-			double ySpeed = Math.abs(rpiY) < Constants.VisionConstants.Y_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiY / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
-					: 0;
-
-			double aSpeed = Math.abs(rpiTheta) < Constants.VisionConstants.ROT_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiTheta / Constants.VisionConstants.ROTATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND,
-							Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND)
-					: 0;
-
-			drive(ChassisSpeeds.fromFieldRelativeSpeeds(
-					xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
-		}
-	}
-
-	public void followTrajectory(SwerveSample sample) {
-		var pose = getPose();
-
-		var targetSpeeds = new ChassisSpeeds(
-				sample.vx + xController.calculate(pose.getX(), sample.x),
-				sample.vy + yController.calculate(pose.getY(), sample.y),
-				sample.omega + headingController.calculate(pose.getRotation().getRadians(),
-						sample.heading));
-
-		drive(targetSpeeds); // I assume that these speeds are field relative, the choreo doc says to have a
-					// driveFieldRelative
-	}
-
 	/**
 	 * Drive the robot using the given chassis speeds. Robot relative or field
 	 * relative depends on how
@@ -292,10 +213,10 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	private void setModuleStates(SwerveModuleState[] states) {
-		frontLeft.setDesiredState(states[0]);
-		frontRight.setDesiredState(states[1]);
-		rearLeft.setDesiredState(states[2]);
-		rearRight.setDesiredState(states[3]);
+		frontLeft.runSetpoint(states[0]);
+		frontRight.runSetpoint(states[1]);
+		rearLeft.runSetpoint(states[2]);
+		rearRight.runSetpoint(states[3]);
 	}
 
 	private SwerveModuleState[] getModuleStates() {
@@ -313,6 +234,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @return Current gyro heading in degrees
 	 */
 	private double getHeading() {
+		return odometry.getPoseMeters().getRotation();
 		return gyro.getAngle() * (DriveConstants.IS_GYRO_REVERSED ? -1 : 1);
 	}
 
