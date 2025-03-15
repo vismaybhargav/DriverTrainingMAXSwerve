@@ -4,6 +4,7 @@
 
 package frc.robot;
 
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
@@ -34,6 +35,9 @@ public final class Constants {
     public static final boolean IS_FIELD_RELATIVE = true;
     public static final double SPEED_DAMP_FACTOR = 2;
 
+    public static final double ODOMETRY_FREQUENCY = 100.0; // Hz
+    public static final double USE_ODOMETRY = true;
+
     // Chassis configuration
     public static final double TRACK_WIDTH_IN = Units.inchesToMeters(26.5);
     // Distance between centers of right and left wheels on robot
@@ -44,6 +48,13 @@ public final class Constants {
             new Translation2d(WHEEL_BASE_IN / 2, -TRACK_WIDTH_IN / 2),
             new Translation2d(-WHEEL_BASE_IN / 2, TRACK_WIDTH_IN / 2),
             new Translation2d(-WHEEL_BASE_IN / 2, -TRACK_WIDTH_IN / 2));
+
+
+    // Zeroed rotation values for each module, see setup instructions
+    public static final Rotation2d FRONT_LEFT_ZERO_ROTATION = new Rotation2d(0.0);
+    public static final Rotation2d FRONT_RIGHT_ZERO_ROTATION = new Rotation2d(0.0);
+    public static final Rotation2d BACK_LEFT_ZERO_ROTATION = new Rotation2d(0.0);
+    public static final Rotation2d BACK_RIGHT_ZERO_ROTATION = new Rotation2d(0.0);
 
     // Angular offsets of the modules relative to the chassis in radians
     public static final double FRONT_LEFT_CHASSIS_ANGULAR_OFFSET = -Math.PI / 2;
@@ -61,6 +72,32 @@ public final class Constants {
     public static final int REAR_LEFT_TURNING_CAN_ID = 12;
     public static final int FRONT_RIGHT_TURNING_CAN_ID = 14;
     public static final int REAR_RIGHT_TURNING_CAN_ID = 16;
+
+    //====== PIDS =====//
+
+    // Driving
+    public static final double DRIVE_KP = 0.0;
+    public static final double DRIVE_KI = 0.0;
+    public static final double DRIVE_KD = 0.0;
+    public static final double DRIVE_KS = 0.0;
+    public static final double DRIVE_KV = 0.1;
+    public static final double DRIVE_KFF = 0.0;
+    public static final double DRIVE_SIM_P = 0.05;
+    public static final double DRIVE_SIM_I = 0.0;
+    public static final double DRIVE_SIM_D = 0.0;
+    public static final double DRIVE_SIM_KS = 0.0;
+    public static final double DRIVE_SIM_KV = 0.0789;
+
+    //Turning
+    // Turn PID configuration
+    public static final double TURN_KP = 2.0;
+    public static final double TURN_KI = 0.0;
+    public static final double TURN_KD = 0.0;
+    public static final double TURN_SIM_P = 8.0;
+    public static final double TURN_SIM_I = 0.0;
+    public static final double TURN_SIM_D = 0.0;
+    public static final double TURN_PID_MIN_INPUT = 0; // Radians
+    public static final double TURN_PID_MAX_INPUT = 2 * Math.PI; // Radians
 
     public static final boolean IS_GYRO_REVERSED = false;
   }
@@ -80,6 +117,22 @@ public final class Constants {
     public static final double DRIVING_MOTOR_REDUCTION = (45.0 * 22) / (DRIVING_MOTOR_PINION_TEETH * 15);
     public static final double DRIVE_WHEEL_FREE_SPEED_RPS = (DRIVING_MOTOR_FREE_SPEED_RPS * WHEEL_CIRCUMFERENCE_METERS)
             / DRIVING_MOTOR_REDUCTION;
+
+    public static final boolean TURNING_MOTOR_INVERTED = false;
+
+    public static final double DRIVING_CURRENT_LIMIT = 60;
+    public static final double TURNING_CURRENT_LIMIT = 20;
+
+    // Drive encoder configuration
+    public static final double driveEncoderPositionFactor =
+            2 * Math.PI / DRIVING_MOTOR_REDUCTION; // Rotor Rotations -> Wheel Radians
+    public static final double driveEncoderVelocityFactor =
+            (2 * Math.PI) / 60.0 / DRIVING_MOTOR_REDUCTION; // Rotor RPM -> Wheel Rad/Sec
+
+    // Turn encoder configuration
+    public static final boolean turnEncoderInverted = true;
+    public static final double turnEncoderPositionFactor = 2 * Math.PI; // Rotations -> Radians
+    public static final double turnEncoderVelocityFactor = (2 * Math.PI) / 60.0; // RPM -> Rad/Sec
   }
 
   public static final class OIConstants {
