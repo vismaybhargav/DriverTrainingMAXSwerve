@@ -10,6 +10,8 @@ import choreo.auto.AutoFactory;
 import edu.wpi.first.wpilibj.PowerDistribution;
 import frc.robot.input.TeleopInput;
 import frc.robot.systems.DriveFSMSystem;
+import frc.robot.systems.drive.gyro.GyroIONavX;
+import frc.robot.systems.drive.module.ModuleIOSpark;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -26,7 +28,7 @@ public class Robot extends LoggedRobot {
 
 	// Systems
 	private DriveFSMSystem driveSystem;
-	private AutoFactory autoFactory;
+
 
 	/**
 	 * This function is run when the robot is first started up and should be used for any
@@ -59,7 +61,15 @@ public class Robot extends LoggedRobot {
 
 		// Instantiate all systems here
 		if(HardwareMap.isDriveHardwarePresent()) {
-			driveSystem = new DriveFSMSystem();
+			if(Robot.isReal()) {
+				driveSystem = new DriveFSMSystem(
+						new GyroIONavX(),
+						new ModuleIOSpark(0),
+						new ModuleIOSpark(1),
+						new ModuleIOSpark(2),
+						new ModuleIOSpark(3)
+				);
+			}
 		}
 	}
 

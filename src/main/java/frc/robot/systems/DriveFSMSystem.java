@@ -1,13 +1,8 @@
 package frc.robot.systems;
 
-import choreo.trajectory.SwerveSample;
-import com.studica.frc.AHRS;
-
 import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
@@ -20,6 +15,8 @@ import frc.robot.Constants.DriveConstants;
 import frc.robot.vision.RaspberryPi;
 
 import jdk.jshell.spi.ExecutionControl;
+
+import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
 import java.util.concurrent.locks.Lock;
@@ -27,7 +24,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
-	// FSM state definitions
+	// FSM state definitions 
 	public enum FSMState {
 		TELEOP_STATE,
 	}
@@ -49,7 +46,7 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
 			DriveConstants.DRIVE_KINEMATICS,
-			Rotation2d.fromDegrees(getHeading()),
+			getHeading(),
 			getModulePositions());
 
 	/* ======================== Constructor ======================== */
@@ -79,15 +76,6 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	/* ======================== Public methods ======================== */
-	/**
-	 * Return current FSM state.
-	 * 
-	 * @return Current FSM state
-	 */
-	public FSMState getCurrentState() {
-		return currentState;
-	}
-
 	/**
 	 * Reset this system to its start state. This may be called from mode init
 	 * when the robot is enabled.
@@ -123,15 +111,12 @@ public class DriveFSMSystem extends SubsystemBase {
 			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		}
 
-		Logger.recordOutput("DriveFSM/Current State", currentState);
-		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", getModuleStates());
-
 		currentState = nextState(input);
 	}
 
 	/**
 	 * Performs specific action based on the autoState passed in.
-	 * 
+	 *
 	 * @return if the action carried out in this state has finished executing
 	 */
 	public boolean updateAutonomous() throws ExecutionControl.NotImplementedException {
@@ -151,9 +136,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	private FSMState nextState(TeleopInput input) {
 		return switch (currentState) {
-			case TELEOP_STATE -> {
-				yield FSMState.TELEOP_STATE;	
-			}
+			case TELEOP_STATE -> FSMState.TELEOP_STATE;
 			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		};
 	}
@@ -191,7 +174,7 @@ public class DriveFSMSystem extends SubsystemBase {
 
 		// Calculate and send speeds
 		drive(ChassisSpeeds.fromFieldRelativeSpeeds(
-				xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
+				xSpeed, ySpeed, aSpeed, getHeading()));
 
 		if (input.getDriveControllerZeroHeadingPressed()) {
 			zeroHeading();
@@ -219,7 +202,33 @@ public class DriveFSMSystem extends SubsystemBase {
 		rearRight.runSetpoint(states[3]);
 	}
 
-	private SwerveModuleState[] getModuleStates() {
+	/**
+	 * Get the current DriveFSM state
+	 *
+	 * @return current FSM state.
+	 */
+	@AutoLogOutput(key = "DriveFSM/Current State")
+	public FSMState getCurrentState() {
+		return currentState;
+	}
+
+	/**
+	 * Get the current pose of the robot.
+	 *
+	 * @return Current pose of the robot
+	 */
+	@AutoLogOutput(key = "/DriveFSM/Current Pose")
+	public Pose2d getPose() {
+		return odometry.getPoseMeters();
+	}
+
+	/**
+	 * Get the current states of the swerve modules.
+	 *
+	 * @return Current states of the swerve modules
+	 */
+	@AutoLogOutput(key = "DriveFSM/Swerve States")
+	public SwerveModuleState[] getModuleStates() {
 		return new SwerveModuleState[] {
 				frontLeft.getState(),
 				frontRight.getState(),
@@ -229,13 +238,38 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	/**
-	 * Get the current gyro heading in degrees.
-	 * 
-	 * @return Current gyro heading in degrees
+	 * Get the current chassis speeds.
+	 *
+	 * @return Current chassis speeds
 	 */
-	private double getHeading() {
+	@AutoLogOutput(key = "DriveFSM/Chassis Speeds")
+	public ChassisSpeeds getChassisSpeeds() {
+		return DriveConstants.DRIVE_KINEMATICS.toChassisSpeeds(getModuleStates());
+	}
+
+	/**
+	 * Get the current gyro heading as a Rotation2D.
+	 * 
+	 * @return Current gyro heading as a Rotation2D
+	 */
+	@AutoLogOutput(key = "DriveFSM/Gyro Heading")
+	public Rotation2d getHeading() {
 		return odometry.getPoseMeters().getRotation();
-		return gyro.getAngle() * (DriveConstants.IS_GYRO_REVERSED ? -1 : 1);
+	}
+
+	/**
+	 * Get the module positions
+	 *
+	 * @return Array of module positions
+	 */
+	@AutoLogOutput(key = "DriveFSM/Module Positions")
+	public SwerveModulePosition[] getModulePositions() {
+		return new SwerveModulePosition[] {
+				frontLeft.getPosition(),
+				frontRight.getPosition(),
+				rearLeft.getPosition(),
+				rearRight.getPosition()
+		};
 	}
 
 	/**
@@ -255,30 +289,12 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * Zero the gyro heading.
 	 */
 	private void zeroHeading() {
-		gyro.zeroYaw();
-	}
-
-	private SwerveModulePosition[] getModulePositions() {
-        return new SwerveModulePosition[] {
-				frontLeft.getPosition(),
-				frontRight.getPosition(),
-				rearLeft.getPosition(),
-				rearRight.getPosition()
-		};
-	}
-
-	/**
-	 * Get the current pose of the robot.
-	 * 
-	 * @return Current pose of the robot
-	 */
-	public Pose2d getPose() {
-		return odometry.getPoseMeters();
+		//gyro.zeroYaw();
 	}
 
 	public void resetOdometry(Pose2d pose) {
 		odometry.resetPosition(
-				Rotation2d.fromDegrees(getHeading()),
+				getHeading(),
 				getModulePositions(),
 				pose);
 	}
