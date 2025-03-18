@@ -4,14 +4,17 @@
 
 package frc.robot;
 
-import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj.XboxController;
 import frc.robot.Constants.OIConstants;
-import frc.robot.subsystems.DriveSubsystem;
-import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.RunCommand;
+import frc.robot.subsystems.SwerveSubsystem;
+import swervelib.SwerveInputStream;
+import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandPS4Controller;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
+
+import java.io.File;
 
 import org.littletonrobotics.junction.Logger;
 
@@ -23,10 +26,63 @@ import org.littletonrobotics.junction.Logger;
  */
 public class RobotContainer {
   // The robot's subsystems
-  private final DriveSubsystem m_robotDrive = new DriveSubsystem();
+  private final SwerveSubsystem m_swerve = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(), "swerve"));
+  private final 
 
   // The driver's controller
   CommandPS4Controller m_driverController = new CommandPS4Controller(OIConstants.kDriverControllerPort);
+
+  /**
+   * Converts driver input into a field-relative ChassisSpeeds that is controlled
+   * by angular velocity.
+   */
+  SwerveInputStream driveAngularVelocity = SwerveInputStream.of(
+    m_swerve.getSwerveDrive(),
+      () -> m_driverController.getLeftY() * -1,
+      () -> m_driverController.getLeftX() * -1
+  )
+      .withControllerRotationAxis(m_driverController::getRightX)
+      .deadband(Constants.OIConstants.kDriveDeadband)
+      .scaleTranslation(0.8)
+      .allianceRelativeControl(true);
+
+  /**
+   * Clone's the angular velocity input stream and converts it to a fieldRelative
+   * input stream.
+   */
+  SwerveInputStream driveDirectAngle = driveAngularVelocity.copy()
+    .withControllerHeadingAxis(
+      m_driverController::getRightX,
+      m_driverController::getRightY)
+      .headingWhile(true);
+
+  /**
+   * Clone's the angular velocity input stream and converts it to a robotRelative
+   * input stream.
+   */
+  SwerveInputStream driveRobotOriented = driveAngularVelocity.copy().robotRelative(true)
+      .allianceRelativeControl(false);
+
+  SwerveInputStream driveAngularVelocityKeyboard = SwerveInputStream.of(m_swerve.getSwerveDrive(),
+      () -> -m_driverController.getLeftY(),
+      () -> -m_driverController.getLeftX())
+      .withControllerRotationAxis(() -> m_driverController.getRawAxis(
+          2))
+      .deadband(Constants.OIConstants.kDriveDeadband)
+      .scaleTranslation(0.8)
+      .allianceRelativeControl(true);
+
+  // Derive the heading axis with math!
+  SwerveInputStream driveDirectAngleKeyboard = driveAngularVelocityKeyboard.copy()
+      .withControllerHeadingAxis(
+        () -> Math.sin(
+          m_driverController.getRawAxis(2) * Math.PI) * (Math.PI * 2),
+        () -> Math.cos(
+          m_driverController.getRawAxis(2) * Math.PI) * (Math.PI *2)
+      )
+      .headingWhile(true)
+      .translationHeadingOffset(true)
+      .translationHeadingOffset(Rotation2d.fromDegrees(0));
 
   /**
    * The container for the robot. Contains subsystems, OI devices, and commands.
@@ -34,18 +90,6 @@ public class RobotContainer {
   public RobotContainer() {
     // Configure the button bindings
     configureButtonBindings();
-
-    // Configure default commands
-    m_robotDrive.setDefaultCommand(
-        // The left stick controls translation of the robot.
-        // Turning is controlled by the X axis of the right stick.
-        new RunCommand(
-            () -> m_robotDrive.drive(
-                -MathUtil.applyDeadband(m_driverController.getLeftY(), OIConstants.kDriveDeadband),
-                -MathUtil.applyDeadband(m_driverController.getLeftX(), OIConstants.kDriveDeadband),
-                -MathUtil.applyDeadband(m_driverController.getRightX(), OIConstants.kDriveDeadband),
-                true),
-            m_robotDrive));
   }
 
   /**
@@ -58,17 +102,20 @@ public class RobotContainer {
    * {@link JoystickButton}.
    */
   private void configureButtonBindings() {
-    m_driverController.share().whileTrue(Commands.runOnce(() -> {
-      m_robotDrive.zeroHeading();
-    }));
+    Command driveFieldOrientedDirectAngle      = m_swerve.driveFieldOriented(driveDirectAngle);
+
+    Command driveFieldOrientedAngularVelocity = m_swerve.driveFieldOriented(driveAngularVelocity);
+
+    Command driveRobotOrientedAngularVelocity  = m_swerve.driveFieldOriented(driveRobotOriented);
+
+    Command driveFieldOrientedDirectAngleKeyboard = m_swerve.driveFieldOriented(driveDirectAngleKeyboard);
+
+    Command driveFieldOrientedAnglularVelocityKeyboard = m_swerve.driveFieldOriented(driveAngularVelocityKeyboard);
+
+    m_swerve.setDefaultCommand(driveFieldOrientedAngularVelocity);
   }
 
   public void updateOutputs() {
-    Logger.recordOutput("Pose", m_robotDrive.getPose());
-    Logger.recordOutput("Heading", m_robotDrive.getHeading());
-    Logger.recordOutput("Swerve States", m_robotDrive.getSwerveStates());
-    Logger.recordOutput("X-Input", -MathUtil.applyDeadband(m_driverController.getLeftY(), OIConstants.kDriveDeadband));
-    Logger.recordOutput("Y-Input", -MathUtil.applyDeadband(m_driverController.getLeftX(), OIConstants.kDriveDeadband));
-    Logger.recordOutput("A-Input", -MathUtil.applyDeadband(m_driverController.getRightX(), OIConstants.kDriveDeadband));
+    Logger.recordOutput("Pose", m_swerve.getSwerveDrive().getMapleSimDrive().get().getSimulatedDriveTrainPose());
   }
 }
