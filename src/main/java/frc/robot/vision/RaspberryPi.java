@@ -2,92 +2,110 @@ package frc.robot.vision;
 
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Translation3d;
-import edu.wpi.first.networktables.DoubleArraySubscriber;
-import edu.wpi.first.networktables.NetworkTable;
-import edu.wpi.first.networktables.NetworkTableInstance;
 import frc.robot.Constants.VisionConstants;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import org.photonvision.PhotonCamera;
+import org.photonvision.targeting.PhotonTrackedTarget;
 
-/**
- * The RaspberryPi class is used to interface with the Raspberry Pi on the robot.
- */
+/** IO implementation for real robot using PhotonVision. */
 public class RaspberryPi {
-    private NetworkTable table;
-    private final DoubleArraySubscriber tagSubscriber;
+	private final PhotonCamera reefCamera;
+	private final PhotonCamera stationCamera;
 
-    /**
-     * Default constructor for the RaspberryPi class.
-     */
-    public RaspberryPi() {
-        table = NetworkTableInstance.getDefault().getTable("datatable");
-        tagSubscriber = table.getDoubleArrayTopic("april_tag_data").subscribe(new double[] {});
-    }
+	/**
+	 * Creates a new RaspberryPiPhoton connecting to real cameras.
+	 */
+	public RaspberryPi() {
+		// Initialize cameras with their network names
+		reefCamera = new PhotonCamera(VisionConstants.REEF_CAM_NAME);
+		stationCamera = new PhotonCamera(VisionConstants.SOURCE_CAM_NAME);
+	}
 
-    /**
-     * Prints the raw data for the april tags on the rpi.
-     */
-    public void printRawData() {
-        double[] rawData = tagSubscriber.get();
-        System.out.println(Arrays.toString(rawData));
-    }
+	/**
+	 * Prints all raw apriltag data to console.
+	 */
+	public void printRawData() {
+		for (AprilTag tag : getAprilTags()) {
+			System.out.println("AprilTag " + tag.getTagID() + " -> " + tag.getPose().toString());
+		}
+	}
 
-    /**
-     * Gets the data from the Raspberry Pi.
-     *
-     * @return  ArrayList<AprilTag>
-     *          The data from the Raspberry Pi
-     */
-    public ArrayList<AprilTag> getAprilTags() {
-        ArrayList<AprilTag> atList = new ArrayList<>();
-        double[] rawData = tagSubscriber.get();
+	/**
+	 * Returns a list of all april tags from reef and station camera.
+	 * @return all april tags
+	 */
+	public ArrayList<AprilTag> getAprilTags() {
+		ArrayList<AprilTag> atList = new ArrayList<>();
+		atList.addAll(getReefAprilTags());
+		atList.addAll(getStationAprilTags());
+		return atList;
+	}
 
-        if (rawData.length == 0) {
-            return atList;
-        }
+	/**
+	 * Returns a list of all april tags from reef CV camera.
+	 * @return all visible reef april tags.
+	 */
+	public ArrayList<AprilTag> getReefAprilTags() {
+		ArrayList<AprilTag> atList = new ArrayList<>();
 
-        for (
-                int i = 0;
-                i < rawData.length;
-                i += VisionConstants.AT_ARR_INC
-        ) {
-            atList.add(
-                    new AprilTag(
-                            (int) rawData[i],
-                            "Reef Camera",
-                            new Translation3d(
-                                    rawData[i + VisionConstants.AT_ARR_CAMERA_OFFSET],
-                                    rawData[i + VisionConstants.AT_ARR_CAMERA_OFFSET + 1],
-                                    rawData[i + VisionConstants.AT_ARR_CAMERA_OFFSET + 2]
-                            ),
-                            new Translation3d(
-                                    rawData[i + VisionConstants.AT_ARR_TRANSLATION_OFFSET],
-                                    rawData[i + VisionConstants.AT_ARR_TRANSLATION_OFFSET + 1],
-                                    rawData[i + VisionConstants.AT_ARR_TRANSLATION_OFFSET + 2]
-                            ),
-                            new Rotation3d(
-                                    rawData[i + VisionConstants.AT_ARR_ROTATION_OFFSET],
-                                    rawData[i + VisionConstants.AT_ARR_ROTATION_OFFSET + 1],
-                                    rawData[i + VisionConstants.AT_ARR_ROTATION_OFFSET + 2]
-                            )
-                    )
-            );
-        }
+		var results = reefCamera.getLatestResult();
+		if (results.hasTargets()) {
+			System.out.println(results.getTargets().size());
+			for (PhotonTrackedTarget target : results.getTargets()) {
+				System.out.println(target.getArea());
+				AprilTag at = new AprilTag(
+					target.getFiducialId(),
+					reefCamera.getName(),
+					new Translation3d(), // camera vector, unused
+					new Translation3d(
+						target.getBestCameraToTarget().getY(),
+						target.getBestCameraToTarget().getZ(),
+						target.getBestCameraToTarget().getX()
+					),
+					new Rotation3d(
+						target.getBestCameraToTarget().getRotation().getY(),
+						target.getBestCameraToTarget().getRotation().getZ(),
+						target.getBestCameraToTarget().getRotation().getX()
+					)
+				);
+				atList.add(at);
+			}
+		}
+		return atList;
+	}
 
-        return atList;
-    }
+	/**
+	 * Returns all april tags visible from Station CV Camera.
+	 * @return list of all april tags
+	 */
+	public ArrayList<AprilTag> getStationAprilTags() {
+		ArrayList<AprilTag> atList = new ArrayList<>();
 
-    /**
-     * Gets an April Tag from the list given a certain tag.
-     * @param id id of the april tag
-     * @return the april tag matching the id
-     */
-    public AprilTag getAprilTagWithID(int id) {
-        return getAprilTags()
-                .stream()
-                .filter(tag -> tag.getTagID() == id)
-                .findFirst()
-                .orElse(null);
-    }
+		var results = stationCamera.getLatestResult();
+		if (results.hasTargets()) {
+			for (PhotonTrackedTarget target : results.getTargets()) {
+				AprilTag at = new AprilTag(
+					target.getFiducialId(),
+					stationCamera.getName(),
+					new Translation3d(), // camera vector, unused
+					new Translation3d(
+						-target.getBestCameraToTarget().getY(),
+						-target.getBestCameraToTarget().getZ(),
+						-target.getBestCameraToTarget().getX()
+					),
+					new Rotation3d(
+						target.getBestCameraToTarget().getRotation().getY(),
+						target.getBestCameraToTarget().getRotation().getZ(),
+						target.getBestCameraToTarget().getRotation().getX()
+					)
+				);
+				// if (at.getPose().getTranslation().getNorm()
+					// < VisionConstants.MAX_TAG_TARGET_DISTANCE_X) {
+				atList.add(at);
+				// }
+			}
+		}
+		return atList;
+	}
 }

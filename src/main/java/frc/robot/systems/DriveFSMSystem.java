@@ -1,7 +1,6 @@
 package frc.robot.systems;
 
 import choreo.trajectory.SwerveSample;
-import com.studica.frc.AHRS;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
@@ -10,9 +9,6 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
-import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
@@ -226,7 +222,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/A-Speed", aSpeed);
 
 		// Calculate and send speeds
-		drive(ChassisSpeeds.fromFieldRelativeSpeeds(
+		swerveDrive.drive(ChassisSpeeds.fromFieldRelativeSpeeds(
 				xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
 
 		if (input.getDriveControllerZeroHeadingPressed()) {
@@ -235,37 +231,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	private void handleAlignToTagState() {
-		var tag = rpi.getAprilTagWithID(9);
-
-		if (tag != null && !tagPositionAligned) {
-			double rpiX = tag.getZ();
-			double rpiY = tag.getX();
-			double rpiTheta = tag.getPitch();
-
-			double xSpeed = Math.abs(rpiX) < Constants.VisionConstants.X_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiX / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
-					: 0;
-
-			double ySpeed = Math.abs(rpiY) < Constants.VisionConstants.Y_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiY / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
-					: 0;
-
-			double aSpeed = Math.abs(rpiTheta) < Constants.VisionConstants.ROT_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiTheta / Constants.VisionConstants.ROTATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND,
-							Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND)
-					: 0;
-
-			drive(ChassisSpeeds.fromFieldRelativeSpeeds(
-					xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
-		}
+		
 	}
 
 	public void followTrajectory(SwerveSample sample) {
@@ -329,7 +295,11 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @return Current pose of the robot
 	 */
 	public Pose2d getPose() {
-		return swerveDrive.getPose();
+		if(Robot.isSimulation()) {
+			return swerveDrive.getMapleSimDrive().get().getSimulatedDriveTrainPose();
+		} else {
+			return swerveDrive.getPose();
+		}
 	}
 
 	public void resetOdometry(Pose2d pose) {

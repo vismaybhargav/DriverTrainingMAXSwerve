@@ -7,9 +7,14 @@ package frc.robot;
 
 // Systems
 import choreo.auto.AutoFactory;
+import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj.PowerDistribution;
 import frc.robot.input.TeleopInput;
 import frc.robot.systems.DriveFSMSystem;
+
+import java.io.File;
+import java.nio.file.FileSystem;
+
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -59,7 +64,7 @@ public class Robot extends LoggedRobot {
 
 		// Instantiate all systems here
 		if(HardwareMap.isDriveHardwarePresent()) {
-			driveSystem = new DriveFSMSystem();
+			driveSystem = new DriveFSMSystem(new File(Filesystem.getDeployDirectory(), "swerve"));
 		}
 
 		// TODO: Are we using this or the new architecture?
@@ -121,7 +126,9 @@ public class Robot extends LoggedRobot {
 	@Override
 	public void robotPeriodic() {
 		if(driveSystem != null) {
+			driveSystem.update(input);
 			Logger.recordOutput("DriveFSM/Current State", driveSystem.getCurrentState());
+			Logger.recordOutput("Sim Pose", driveSystem.getPose());
 		}
 	}
 }
