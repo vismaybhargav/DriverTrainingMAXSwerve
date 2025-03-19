@@ -1,7 +1,7 @@
 package frc.robot.systems;
 
 import choreo.trajectory.SwerveSample;
-
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -9,12 +9,16 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
 import frc.robot.Robot;
 import frc.robot.input.TeleopInput;
+import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
+import frc.robot.vision.AprilTag;
 import frc.robot.vision.RaspberryPi;
 
 import jdk.jshell.spi.ExecutionControl;
@@ -24,29 +28,66 @@ import swervelib.parser.SwerveParser;
 import swervelib.telemetry.SwerveDriveTelemetry;
 
 import java.io.File;
+import java.util.ArrayList;
 
 import static edu.wpi.first.units.Units.Meter;
 
 public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
 	// FSM state definitions
-	public enum FSMState {
+	public enum DriveFSMState {
 		TELEOP_STATE,
-		ALIGN_TO_TAG_STATE
+		ALIGN_TO_REEF_TAG_STATE,
+		ALIGN_TO_STATION_TAG_STATE
 	}
 
 	/* ======================== Private variables ======================== */
-	private FSMState currentState;
+	private DriveFSMState currentState;
 
 	private final SwerveDrive swerveDrive;
+	private Rotation2d rotationAlignmentPose;
+	private	Pose2d alignmentPose2d = null;
+	private boolean driveToPoseRunning = false;
+	private boolean driveToPoseFinished = false;
+	private boolean aligningToReef = false;
 
-	private final RaspberryPi rpi;
+	private int[] blueReefTagArray = new int[] {
+		AutoConstants.B_REEF_1_TAG_ID,
+		AutoConstants.B_REEF_2_TAG_ID,
+		AutoConstants.B_REEF_3_TAG_ID,
+		AutoConstants.B_REEF_4_TAG_ID,
+		AutoConstants.B_REEF_5_TAG_ID,
+		AutoConstants.B_REEF_6_TAG_ID
+	};
+	private int[] redReefTagArray = new int[] {
+		AutoConstants.R_REEF_1_TAG_ID,
+		AutoConstants.R_REEF_2_TAG_ID,
+		AutoConstants.R_REEF_3_TAG_ID,
+		AutoConstants.R_REEF_4_TAG_ID,
+		AutoConstants.R_REEF_5_TAG_ID,
+		AutoConstants.R_REEF_6_TAG_ID
+	};
 
-	private boolean tagPositionAligned = false;
-	private Translation2d alignmentTranslation2d = null;
-	private double rotationCache2d = 0;
-	private Rotation2d rotationAlignmentPose = new Rotation2d();
+	private int[] blueStationTagArray = new int[] {
+		AutoConstants.BLUE_L_STATION_ID,
+		AutoConstants.BLUE_R_STATION_ID
+	};
+	private int[] redStationTagArray = new int[] {
+		AutoConstants.RED_L_STATION_ID,
+		AutoConstants.RED_R_STATION_ID
+	};
+
+	/* -- cv constants -- */
+	private RaspberryPi rpi = new RaspberryPi();
 	private int tagID = -1;
+	private double alignmentYOff;
+	private double alignmentXOff;
+
+	private ArrayList<Pose2d> aprilTagReefRefPoses = new ArrayList<Pose2d>();
+	private ArrayList<Pose2d> aprilTagStationRefPoses = new ArrayList<Pose2d>();
+	private ArrayList<Pose2d> aprilTagVisionPoses = new ArrayList<Pose2d>();
+	private AprilTagFieldLayout aprilTagFieldLayout;
+	private boolean hasLocalized = false;
 
 	// Auto PIDS
 	private final PIDController xController = new PIDController(5, 0, 0);
@@ -97,7 +138,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * 
 	 * @return Current FSM state
 	 */
-	public FSMState getCurrentState() {
+	public DriveFSMState getCurrentState() {
 		return currentState;
 	}
 
@@ -110,7 +151,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * Ex. if the robot is enabled, disabled, then reenabled.
 	 */
 	public void reset() {
-		currentState = FSMState.TELEOP_STATE;
+		currentState = DriveFSMState.TELEOP_STATE;
 		zeroHeading();
 
 		// Call one tick of update to ensure outputs reflect start state
@@ -125,28 +166,23 @@ public class DriveFSMSystem extends SubsystemBase {
 	 *              the robot is in autonomous mode.
 	 */
 	public void update(TeleopInput input) {
-		if (input == null)
+		if (input == null) {
 			return;
-
-		switch (currentState) {
-			case TELEOP_STATE -> {
-				// Reset all the auto logic when we go into the teleop state.
-				if (alignmentTranslation2d != null) {
-					alignmentTranslation2d = null;
-					rotationCache2d = 0;
-					tagPositionAligned = false;
-				}
-				handleTeleopState(input);
-			}
-			case ALIGN_TO_TAG_STATE -> handleAlignToTagState();
-			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		}
 
-		Logger.recordOutput("DriveFSM/Current State", currentState);
-		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", getModuleStates());
-
-		swerveDrive.updateOdometry();
-
+		switch (currentState) {
+			case TELEOP_STATE:
+				handleTeleOpState(input);
+				break;
+			case ALIGN_TO_REEF_TAG_STATE:
+				handleReefTagAlignment(input);
+				break;
+			case ALIGN_TO_STATION_TAG_STATE:
+				handleStationTagAlignment(input);
+				break;
+			default:
+				throw new IllegalStateException("Invalid state: " + currentState.toString());
+		}
 		currentState = nextState(input);
 	}
 
@@ -170,68 +206,205 @@ public class DriveFSMSystem extends SubsystemBase {
 	 *              the robot is in autonomous mode.
 	 * @return FSM state for the next iteration
 	 */
-	private FSMState nextState(TeleopInput input) {
-		return switch (currentState) {
-			case TELEOP_STATE -> {
-				if (input.getDriveControllerAlignToTagPressed()) {
-					yield FSMState.ALIGN_TO_TAG_STATE;
+	private DriveFSMState nextState(TeleopInput input) {
+		switch (currentState) {
+			case TELEOP_STATE:
+				if (input.getAlignReefButton()) {
+					return DriveFSMState.ALIGN_TO_REEF_TAG_STATE;
+				} else if (input.getDriveTriangleButton()) {
+					return DriveFSMState.ALIGN_TO_STATION_TAG_STATE;
 				} else {
-					yield FSMState.TELEOP_STATE;
+					return DriveFSMState.TELEOP_STATE;
 				}
-			}
-			case ALIGN_TO_TAG_STATE -> {
-				if (!input.getDriveControllerAlignToTagPressed()) {
-					yield FSMState.TELEOP_STATE;
+			case ALIGN_TO_REEF_TAG_STATE:
+				if (input.getAlignReefButton()) {
+					return DriveFSMState.ALIGN_TO_REEF_TAG_STATE;
+				} else if (input.getDriveTriangleButton()) {
+					return DriveFSMState.ALIGN_TO_STATION_TAG_STATE;
 				} else {
-					yield FSMState.ALIGN_TO_TAG_STATE;
+					return DriveFSMState.TELEOP_STATE;
 				}
-			}
-			default -> throw new IllegalStateException("Invalid state: " + currentState);
-		};
-	}
-
-	/* ------------------------ FSM state handlers ------------------------ */
-	private void handleTeleopState(TeleopInput input) {
-		// Get joystick inputs
-		var xInput = input.getDriveControllerLeftY(); // Up and down on the left stick
-		var yInput = input.getDriveControllerLeftX(); // Left and right on the left stick
-		var rotInput = input.getDriveControllerRightX(); // Left and right on the right stick
-
-		Logger.recordOutput("DriveFSM/TeleOp/Inputs/X-Input", xInput);
-		Logger.recordOutput("DriveFSM/TeleOp/Inputs/Y-Input", yInput);
-		Logger.recordOutput("DriveFSM/TeleOp/Inputs/A-Input", rotInput);
-
-		// Calculate speeds
-		// Clamping the speeds here might be redundant as the kinematics should already
-		// do this.
-		var xSpeed = -MathUtil.applyDeadband(
-				xInput, Constants.OIConstants.DRIVE_DEADBAND)
-				* DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
-
-		var ySpeed = -MathUtil.applyDeadband(
-				yInput, Constants.OIConstants.DRIVE_DEADBAND)
-				* DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
-
-		// Rotational Speed
-		var aSpeed = -MathUtil.applyDeadband(
-				rotInput, Constants.OIConstants.DRIVE_DEADBAND)
-				* DriveConstants.MAX_ANGULAR_SPEED_RAD_PER_SEC / DriveConstants.SPEED_DAMP_FACTOR;
-
-		Logger.recordOutput("DriveFSM/TeleOp/Speeds/X-Speed", xSpeed);
-		Logger.recordOutput("DriveFSM/TeleOp/Speeds/Y-Speed", ySpeed);
-		Logger.recordOutput("DriveFSM/TeleOp/Speeds/A-Speed", aSpeed);
-
-		// Calculate and send speeds
-		swerveDrive.drive(ChassisSpeeds.fromFieldRelativeSpeeds(
-				xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
-
-		if (input.getDriveControllerZeroHeadingPressed()) {
-			zeroHeading();
+			case ALIGN_TO_STATION_TAG_STATE:
+				if (input.getAlignReefButton()) {
+					return DriveFSMState.ALIGN_TO_REEF_TAG_STATE;
+				} else if (input.getDriveTriangleButton()) {
+					return DriveFSMState.ALIGN_TO_STATION_TAG_STATE;
+				} else {
+					return DriveFSMState.TELEOP_STATE;
+				}
+			default:
+				throw new IllegalStateException("Invalid state: " + currentState.toString());
 		}
 	}
 
-	private void handleAlignToTagState() {
+	/* ------------------------ FSM state handlers ------------------------ */
+	private void handleTeleOpState(TeleopInput input) {
+		/* --- cv alignment reset --- */
+		tagID = -1;
+		alignmentXOff = 0;
+		alignmentYOff = 0;
+		driveToPoseFinished = false;
+		driveToPoseRunning = false;
+
+		double constantDamp = 1;
+
+		if (elevatorSystem != null) {
+			constantDamp = (elevatorSystem.isElevatorAtL4() || input.getDriveCrossButton())
+				? DriveConstants.SPEED_DAMP_FACTOR : DriveConstants.NORMAL_DAMP;
+		}
+
+		double xSpeed = MathUtil.applyDeadband(
+			slewRateX.calculate(input.getDriveLeftJoystickY()), DriveConstants.JOYSTICK_DEADBAND
+			) * MAX_SPEED / constantDamp;
+			// Drive forward with negative Y (forward) ^
+
+		double ySpeed = MathUtil.applyDeadband(
+			slewRateY.calculate(input.getDriveLeftJoystickX()), DriveConstants.JOYSTICK_DEADBAND
+			) * MAX_SPEED / constantDamp;
+			// Drive left with negative X (left) ^
+
+		double rotXComp = MathUtil.applyDeadband(
+			input.getDriveRightJoystickX(), DriveConstants.JOYSTICK_DEADBAND)
+			* MAX_ANGULAR_RATE / constantDamp;
+			// Drive left with negative X (left) ^
+
+		if (rotXComp != 0) {
+			rotationAlignmentPose =
+				(Utils.isSimulation())
+					? getMapleSimDrivetrain().getDriveSimulation()
+					.getSimulatedDriveTrainPose().getRotation()
+					: drivetrain.getState().Pose.getRotation();
+		}
+
+		if (!input.getDriveCircleButton()) {
+			drivetrain.setControl(
+				driveFacingAngle.withVelocityX(xSpeed * allianceOriented.getAsInt())
+				.withVelocityY(ySpeed * allianceOriented.getAsInt())
+				.withTargetDirection(rotationAlignmentPose)
+				.withTargetRateFeedforward(-rotXComp)
+				.withHeadingPID(DriveConstants.HEADING_P, 0, 0)
+			);
+		} else {
+			drivetrain.setControl(
+				driveRobotCentric.withVelocityX(xSpeed * allianceOriented.getAsInt())
+				.withVelocityY(ySpeed * allianceOriented.getAsInt())
+				.withRotationalRate(-rotXComp)
+			);
+		}
+
+		if (input.getSeedGyroButtonPressed()) {
+			drivetrain.seedFieldCentric();
+			rotationAlignmentPose = new Rotation2d();
+			hasLocalized = false;
+		}
+
+		Logger.recordOutput("TeleOp/XSpeed", xSpeed);
+		Logger.recordOutput("TeleOp/YSpeed", ySpeed);
+		Logger.recordOutput("TeleOp/RotSpeed", rotXComp);	
+	}
+
+	private void handleReefTagAlignment(TeleopInput input) {
+
+		if (input != null) {
+			if (input.getAlignLeftOffsetButton()) {
+				alignmentYOff = AutoConstants.REEF_Y_L_TAG_OFFSET;
+			} else if (input.getAlignRightOffsetButton()) {
+				alignmentYOff = AutoConstants.REEF_Y_R_TAG_OFFSET;
+			} else {
+				alignmentYOff = AutoConstants.REEF_Y_L_TAG_OFFSET;
+			}
+		}
+
+		alignmentXOff = AutoConstants.REEF_X_TAG_OFFSET;
+
+		ArrayList<AprilTag> sortedTagList = rpi.getReefAprilTags();
+
+		if (DriverStation.getAlliance().get().equals(Alliance.Blue) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				if (tagID == -1) {
+					for (int id: blueReefTagArray) {
+						if (tag.getTagID() == id) {
+							tagID = id;
+							break;
+						}
+					}
+				} else {
+					break;
+				}
+			}
+
+		} else if (DriverStation.getAlliance().get().equals(Alliance.Red) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				if (tagID == -1) {
+					for (int id: redReefTagArray) {
+						if (tag.getTagID() == id) {
+							tagID = id;
+							break;
+						}
+					}
+				} else {
+					break;
+				}
+			}
+
+		}
+
+		Logger.recordOutput("TagID", tagID);
+
+		if (tagID != -1) {
+			aligningToReef = true;
+			handleTagAlignment(input, tagID, true);
+		} else {
+			drivetrain.setControl(brake);
+		}
+	}
+
+	private void handleStationTagAlignment(TeleopInput input) {
 		
+		if (input != null) {
+			if (input.getAlignLeftOffsetButton()) {
+				alignmentYOff = AutoConstants.STATION_Y_L_TAG_OFFSET;
+			} else if (input.getAlignRightOffsetButton()) {
+				alignmentYOff = AutoConstants.STATION_Y_R_TAG_OFFSET;
+			} else {
+				alignmentYOff = 0;
+			}
+		}
+
+		alignmentXOff = -AutoConstants.SOURCE_X_OFFSET;
+
+		ArrayList<AprilTag> sortedTagList = rpi.getStationAprilTags();
+
+		if (DriverStation.getAlliance().get().equals(Alliance.Blue) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				for (int id: blueStationTagArray) {
+					if (tag.getTagID() == id) {
+						tagID = id;
+						break;
+					}
+				}
+			}
+
+		} else if (DriverStation.getAlliance().get().equals(Alliance.Red) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				for (int id: redStationTagArray) {
+					if (tag.getTagID() == id) {
+						tagID = id;
+						break;
+					}
+				}
+			}
+
+		}
+
+		Logger.recordOutput("TagID", tagID);
+
+		if (tagID != -1) {
+			aligningToReef = false;
+			handleTagAlignment(input, tagID, true);
+		} else {
+			drivetrain.setControl(brake);
+		}	
 	}
 
 	public void followTrajectory(SwerveSample sample) {
