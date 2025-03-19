@@ -7,18 +7,29 @@ import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
+import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
+import frc.robot.Robot;
 import frc.robot.input.TeleopInput;
-import frc.robot.MAXSwerveModule;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.vision.RaspberryPi;
 
 import jdk.jshell.spi.ExecutionControl;
 import org.littletonrobotics.junction.Logger;
+import swervelib.SwerveDrive;
+import swervelib.parser.SwerveParser;
+import swervelib.telemetry.SwerveDriveTelemetry;
+
+import java.io.File;
+
+import static edu.wpi.first.units.Units.Meter;
 
 public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
@@ -31,19 +42,9 @@ public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Private variables ======================== */
 	private FSMState currentState;
 
-	// Hardware devices should be owned by one and only one system. They must
-	// be private to their owner system and may not be used elsewhere.
-	private final MAXSwerveModule frontLeft;
-	private final MAXSwerveModule frontRight;
-	private final MAXSwerveModule rearLeft;
-	private final MAXSwerveModule rearRight;
-	private final AHRS gyro;
-	private final RaspberryPi rpi;
+	private final SwerveDrive swerveDrive;
 
-	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
-			DriveConstants.DRIVE_KINEMATICS,
-			Rotation2d.fromDegrees(getHeading()),
-			getModulePositions());
+	private final RaspberryPi rpi;
 
 	private boolean tagPositionAligned = false;
 	private Translation2d alignmentTranslation2d = null;
@@ -62,29 +63,30 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * one-time initialization or configuration of hardware required. Note
 	 * the constructor is called only once when the robot boots.
 	 */
-	public DriveFSMSystem() {
+	public DriveFSMSystem(File directory) {
+
+		boolean blueAlliance = false;
+		Pose2d startingPose = blueAlliance ? new Pose2d(new Translation2d(Meter.of(1),
+				Meter.of(4)),
+				Rotation2d.fromDegrees(0))
+				: new Pose2d(new Translation2d(Meter.of(16),
+				Meter.of(4)),
+				Rotation2d.fromDegrees(180));
+
 		// Perform hardware init
-		frontLeft = new MAXSwerveModule(
-				DriveConstants.FRONT_LEFT_DRIVING_CAN_ID,
-				DriveConstants.FRONT_LEFT_TURNING_CAN_ID,
-				DriveConstants.FRONT_LEFT_CHASSIS_ANGULAR_OFFSET);
-
-		frontRight = new MAXSwerveModule(
-				DriveConstants.FRONT_RIGHT_DRIVING_CAN_ID,
-				DriveConstants.FRONT_RIGHT_TURNING_CAN_ID,
-				DriveConstants.FRONT_RIGHT_CHASSIS_ANGULAR_OFFSET);
-
-		rearLeft = new MAXSwerveModule(
-				DriveConstants.REAR_LEFT_DRIVING_CAN_ID,
-				DriveConstants.REAR_LEFT_TURNING_CAN_ID,
-				DriveConstants.BACK_LEFT_CHASSIS_ANGULAR_OFFSET);
-
-		rearRight = new MAXSwerveModule(
-				DriveConstants.REAR_RIGHT_DRIVING_CAN_ID,
-				DriveConstants.REAR_RIGHT_TURNING_CAN_ID,
-				DriveConstants.BACK_RIGHT_CHASSIS_ANGULAR_OFFSET);
-
-		gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
+		SwerveDriveTelemetry.verbosity = SwerveDriveTelemetry.TelemetryVerbosity.HIGH;
+		try {
+			// Hardware devices should be owned by one and only one system. They must
+			// be private to their owner system and may not be used elsewhere.
+			double maxSpeed = 5.41;
+			swerveDrive = new SwerveParser(directory).createSwerveDrive(maxSpeed, startingPose);
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+		swerveDrive.setHeadingCorrection(false);
+		swerveDrive.setCosineCompensator(Robot.isReal());
+		swerveDrive.setAngularVelocityCompensation(true, true, 0.1);
+		swerveDrive.setModuleEncoderAutoSynchronize(true, 1);
 		rpi = new RaspberryPi();
 
 		headingController.enableContinuousInput(-Math.PI, Math.PI);
@@ -146,6 +148,8 @@ public class DriveFSMSystem extends SubsystemBase {
 
 		Logger.recordOutput("DriveFSM/Current State", currentState);
 		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", getModuleStates());
+
+		swerveDrive.updateOdometry();
 
 		currentState = nextState(input);
 	}
@@ -273,38 +277,17 @@ public class DriveFSMSystem extends SubsystemBase {
 				sample.omega + headingController.calculate(pose.getRotation().getRadians(),
 						sample.heading));
 
-		drive(targetSpeeds); // I assume that these speeds are field relative, the choreo doc says to have a
+		swerveDrive.driveFieldOriented(targetSpeeds);
+		// I assume that these speeds are field relative, the choreo doc says to have a
 					// driveFieldRelative
 	}
 
-	/**
-	 * Drive the robot using the given chassis speeds. Robot relative or field
-	 * relative depends on how
-	 * you pass in the speeds, see
-	 * {@link ChassisSpeeds#fromFieldRelativeSpeeds(double, double, double, Rotation2d)}.
-	 * 
-	 * @param speeds Chassis speeds
-	 */
-	private void drive(ChassisSpeeds speeds) {
-		var states = DriveConstants.DRIVE_KINEMATICS.toSwerveModuleStates(speeds);
-		SwerveDriveKinematics.desaturateWheelSpeeds(states, DriveConstants.MAX_SPEED_METERS_PER_SECOND);
-		setModuleStates(states);
-	}
-
 	private void setModuleStates(SwerveModuleState[] states) {
-		frontLeft.setDesiredState(states[0]);
-		frontRight.setDesiredState(states[1]);
-		rearLeft.setDesiredState(states[2]);
-		rearRight.setDesiredState(states[3]);
+		swerveDrive.setModuleStates(states, true);
 	}
 
 	private SwerveModuleState[] getModuleStates() {
-		return new SwerveModuleState[] {
-				frontLeft.getState(),
-				frontRight.getState(),
-				rearLeft.getState(),
-				rearRight.getState()
-		};
+		return swerveDrive.getStates();
 	}
 
 	/**
@@ -313,7 +296,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @return Current gyro heading in degrees
 	 */
 	private double getHeading() {
-		return gyro.getAngle() * (DriveConstants.IS_GYRO_REVERSED ? -1 : 1);
+		return swerveDrive.getYaw().getDegrees() * (DriveConstants.IS_GYRO_REVERSED ? -1 : 1);
 	}
 
 	/**
@@ -333,16 +316,11 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * Zero the gyro heading.
 	 */
 	private void zeroHeading() {
-		gyro.zeroYaw();
+		swerveDrive.setGyroOffset(new Rotation3d());
 	}
 
 	private SwerveModulePosition[] getModulePositions() {
-        return new SwerveModulePosition[] {
-				frontLeft.getPosition(),
-				frontRight.getPosition(),
-				rearLeft.getPosition(),
-				rearRight.getPosition()
-		};
+        return swerveDrive.getModulePositions();
 	}
 
 	/**
@@ -351,13 +329,10 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @return Current pose of the robot
 	 */
 	public Pose2d getPose() {
-		return odometry.getPoseMeters();
+		return swerveDrive.getPose();
 	}
 
 	public void resetOdometry(Pose2d pose) {
-		odometry.resetPosition(
-				Rotation2d.fromDegrees(getHeading()),
-				getModulePositions(),
-				pose);
+		swerveDrive.resetOdometry(pose);
 	}
 }
