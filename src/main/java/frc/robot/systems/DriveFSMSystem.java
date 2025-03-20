@@ -283,11 +283,7 @@ public class DriveFSMSystem extends SubsystemBase {
 			// Drive left with negative X (left) ^
 
 		if (rotXComp != 0) {
-			rotationAlignmentPose =
-				(Utils.isSimulation())
-					? getMapleSimDrivetrain().getDriveSimulation()
-					.getSimulatedDriveTrainPose().getRotation()
-					: drivetrain.getState().Pose.getRotation();
+			rotationAlignmentPose = getPose().getRotation();
 		}
 
 		if (!input.getDriveCircleButton()) {
