@@ -15,11 +15,12 @@ import edu.wpi.first.wpilibj2.command.ParallelCommandGroup;
 import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
 import frc.robot.HardwareMap;
 import frc.robot.Robot;
-import static frc.robot.Constants.AutoConstants.AutoCommands.*;
 import frc.robot.Constants;
 import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.AutoConstants.AutoCommands;
 import frc.robot.systems.DriveFSMSystem;
+
+import static frc.robot.Constants.AutoConstants.AutoCommands.*;
 
 public class AutoRoutines {
 
@@ -200,50 +201,17 @@ public class AutoRoutines {
 		}
 	}
 
-	private Command checkElevatorCommands(AutoCommands commandEntry) {
-		switch (commandEntry) {
-			case ELEVATOR_GROUND_CMD:
-				return elevatorSystem.elevatorGroundCommand();
-			case ELEVATOR_L2_CMD:
-				return elevatorSystem.elevatorL2Command();
-			case ELEVATOR_L3_CMD:
-				return elevatorSystem.elevatorL3Command();
-			case ELEVATOR_L4_CMD:
-				return elevatorSystem.elevatorL4Command();
-			case ELEVATOR_WAIT:
-				return elevatorSystem.waitCommand();
-			default:
-				return null;
-		}
-	}
-
-	private Command checkFunnelCommands(AutoCommands commandEntry) {
-		System.out.println("REACHED FUNNEL PARSE");
-		switch (commandEntry) {
-			case INTAKE_CORAL_CMD:
-				return funnelSystem.intakeCoralCommand();
-			case OUTTAKE_CORAL_CMD:
-				return funnelSystem.outtakeCoralCommand();
-			default:
-				return null;
-		}
-	}
 
 	/* ----------------------------------------------------------- */
 
 	/**
 	 * Constructs an AutoRoutines object.
 	 * @param driveFSMSystem
-	 * @param elevatorFSMSystem
-	 * @param funnelFSMSystem
 	 * */
-	public AutoRoutines(DriveFSMSystem driveFSMSystem, ElevatorFSMSystem elevatorFSMSystem,
-		FunnelFSMSystem funnelFSMSystem) {
+	public AutoRoutines(DriveFSMSystem driveFSMSystem) {
 
 		// Assign systems
 		driveSystem = driveFSMSystem;
-		elevatorSystem = elevatorFSMSystem;
-		funnelSystem = funnelFSMSystem;
 
 		if (HardwareMap.isDriveHardwarePresent()) {
 			sysRoutine = driveSystem.configureAutoSettings().newRoutine("AutoRoutine");
@@ -448,25 +416,10 @@ public class AutoRoutines {
 
 		Command returnInitCommand = null;
 
-		if (HardwareMap.isDriveHardwarePresent()) {
-			returnInitCommand = (returnInitCommand == null)
+		returnInitCommand = (returnInitCommand == null)
 				? checkDriveCommands(commandEntry) : returnInitCommand;
-
-			if (HardwareMap.isCVHardwarePresent()) {
-				returnInitCommand = (returnInitCommand == null)
-					? checkAlignmentCommands(commandEntry) : returnInitCommand;
-			}
-		}
-
-		if (HardwareMap.isElevatorHardwarePresent()) {
-			returnInitCommand = (returnInitCommand == null)
-				? checkElevatorCommands(commandEntry) : returnInitCommand;
-		}
-
-		if (HardwareMap.isFunnelHardwarePresent()) {
-			returnInitCommand = (returnInitCommand == null)
-				? checkFunnelCommands(commandEntry) : returnInitCommand;
-		}
+		returnInitCommand = (returnInitCommand == null)
+				? checkAlignmentCommands(commandEntry) : returnInitCommand;
 
 		return returnInitCommand;
 	}
