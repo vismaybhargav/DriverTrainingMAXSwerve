@@ -269,7 +269,7 @@ public class DriveFSMSystem extends SubsystemBase {
 
 		double constantDamp = 1;
 
-		
+		constantDamp = (input.getDriveCrossButton()) ? DriveConstants.SPEED_DAMP_FACTOR : constantDamp;
 
 		double xSpeed = MathUtil.applyDeadband(
 			slewRateX.calculate(input.getDriveLeftJoystickY()), OIConstants.DRIVE_DEADBAND
@@ -427,13 +427,7 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	private void handleTagAlignment(TeleopInput input, int id, boolean allianceFlip) {
 		AprilTag tag = rpi.getAprilTagWithID(id);
-		Pose2d currPose;
-
-		if (Utils.isSimulation()) {
-			currPose = getMapleSimDrivetrain().getDriveSimulation().getSimulatedDriveTrainPose();
-		} else {
-			currPose = drivetrain.getState().Pose;
-		}
+		Pose2d currPose = getPose();
 
 		Transform3d robotToCamera;
 		if (aligningToReef) {
