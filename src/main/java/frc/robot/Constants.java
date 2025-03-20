@@ -30,6 +30,7 @@ public final class Constants {
 		// the robot, rather the allowed maximum speeds
 		public static final double MAX_SPEED_METERS_PER_SECOND = 4.8;
 		public static final double MAX_ANGULAR_SPEED_RAD_PER_SEC = 2 * Math.PI; // radians per second
+		public static final double SLEW_RATE = 2.9;
 
 		// Chassis configuration
 		public static final double kTrackWidth = Units.inchesToMeters(22.5);

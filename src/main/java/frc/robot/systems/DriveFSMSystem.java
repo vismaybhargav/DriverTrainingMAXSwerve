@@ -15,6 +15,8 @@ import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
@@ -34,6 +36,7 @@ import swervelib.telemetry.SwerveDriveTelemetry;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import static edu.wpi.first.units.Units.Meter;
 
@@ -46,6 +49,9 @@ public class DriveFSMSystem extends SubsystemBase {
 		ALIGN_TO_STATION_TAG_STATE
 	}
 
+	private static final double MAX_SPEED = 1;
+	private static final double MAX_ANGULAR_RATE = 0.5;
+
 	/* ======================== Private variables ======================== */
 	private DriveFSMState currentState;
 
@@ -54,6 +60,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	private	Pose2d alignmentPose2d = null;
 	private boolean driveToPoseRunning = false;
 	private boolean driveToPoseFinished = false;
+	private boolean driveToPoseRotateFinished = false;
 	private boolean aligningToReef = false;
 
 	private int[] blueReefTagArray = new int[] {
@@ -262,10 +269,7 @@ public class DriveFSMSystem extends SubsystemBase {
 
 		double constantDamp = 1;
 
-		if (elevatorSystem != null) {
-			constantDamp = (elevatorSystem.isElevatorAtL4() || input.getDriveCrossButton())
-				? DriveConstants.SPEED_DAMP_FACTOR : DriveConstants.NORMAL_DAMP;
-		}
+		
 
 		double xSpeed = MathUtil.applyDeadband(
 			slewRateX.calculate(input.getDriveLeftJoystickY()), OIConstants.DRIVE_DEADBAND
@@ -283,7 +287,11 @@ public class DriveFSMSystem extends SubsystemBase {
 			// Drive left with negative X (left) ^
 
 		if (rotXComp != 0) {
-			rotationAlignmentPose = getPose().getRotation();
+			rotationAlignmentPose =
+				(Utils.isSimulation())
+					? getMapleSimDrivetrain().getDriveSimulation()
+					.getSimulatedDriveTrainPose().getRotation()
+					: drivetrain.getState().Pose.getRotation();
 		}
 
 		if (!input.getDriveCircleButton()) {
@@ -657,6 +665,76 @@ public class DriveFSMSystem extends SubsystemBase {
 		swerveDrive.driveFieldOriented(targetSpeeds);
 		// I assume that these speeds are field relative, the choreo doc says to have a
 					// driveFieldRelative
+	}
+
+	/**
+	* Command to align to any visible reef tags or not move if none are seen.
+	* @param id the id of the tag to align to
+	* @param x
+	* @param y
+	* @return align to tag command.
+	*/
+	public Command alignToTagCommand(int id, double x, double y) {
+		class AlignToTagCommand extends Command {
+
+			private Timer alignmentTimerAutoCommand;
+
+			AlignToTagCommand() {
+				alignmentTimerAutoCommand = new Timer();
+			}
+
+			public void initialize() {
+				alignmentXOff = x;
+				alignmentYOff = y;
+
+				if (
+					Arrays.stream(redReefTagArray).anyMatch(val -> val == id)
+					|| Arrays.stream(blueReefTagArray).anyMatch(val -> val == id)
+				) {
+					aligningToReef = true;
+				} else {
+					aligningToReef = false;
+				}
+
+				alignmentTimerAutoCommand.start();
+
+			}
+
+			@Override
+			public void execute() {
+				handleTagAlignment(null, id, false);
+			}
+
+			public boolean isFinished() {
+				return driveToPoseFinished || alignmentTimerAutoCommand.get() > 2;
+			}
+
+			public void end(boolean interrupted) {
+				tagID = -1;
+				alignmentXOff = 0;
+				alignmentYOff = 0;
+				driveToPoseFinished = false;
+				driveToPoseRunning = false;
+				driveToPoseRotateFinished = false;
+				alignmentPose2d = null;
+				alignmentTimerAutoCommand.stop();
+				alignmentTimerAutoCommand.reset();
+			}
+		}
+
+		return new AlignToTagCommand();
+	}
+
+	public Command brakeCommand() {
+		class BrakeCommand extends Command {
+			@Override
+			public boolean isFinished() {
+				drivetrain.setControl(brake);
+				return true;
+			}
+		}
+
+		return new BrakeCommand();
 	}
 
 	private void setModuleStates(SwerveModuleState[] states) {
