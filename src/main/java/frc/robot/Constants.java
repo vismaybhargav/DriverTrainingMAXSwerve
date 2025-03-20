@@ -5,6 +5,8 @@
 package frc.robot;
 
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
@@ -25,7 +27,100 @@ import edu.wpi.first.math.util.Units;
  */
 
 public final class Constants {
-		public static final class DriveConstants {
+	public static final class SimConstants {
+		public static final Pose2d BLUE_1_STARTING_POS_M = new Pose2d(
+				7.5856494,
+				6.4390466,
+				new Rotation2d(Math.PI));
+
+		public static final Pose2d BLUE_2_STARTING_POS_M = new Pose2d(
+				7.5856494,
+				4.0468566,
+				new Rotation2d(Math.PI));
+
+		public static final Pose2d BLUE_3_STARTING_POS_M = new Pose2d(
+				7.5856494,
+				1.5596578,
+				new Rotation2d(Math.PI));
+
+		public static final Pose2d RED_1_STARTING_POS_M = new Pose2d(
+				9.972452163696289,
+				1.5596578,
+				new Rotation2d());
+		public static final Pose2d RED_2_STARTING_POS_M = new Pose2d(
+				9.972452163696289,
+				4.0468566,
+				new Rotation2d());
+		public static final Pose2d RED_3_STARTING_POS_M = new Pose2d(
+				9.972452163696289,
+				6.4390466,
+				new Rotation2d());
+
+		// Estimated values for now, need to be calculated later
+		public static final double MASS_WITH_BUMPER_LBS = 115;
+		public static final double MOI = 6.99597;
+		public static final double WIDTH_IN = 35.5;
+		public static final double LENGTH_IN = 35.5;
+		public static final double WHEEL_COF = 1.2;
+
+		public static final Translation2d FL_TRANSLATION = new Translation2d(
+				10.75,
+				-10.75);
+
+		public static final Translation2d FR_TRANSLATION = new Translation2d(
+				10.75,
+				10.75);
+
+		public static final Translation2d BL_TRANSLATION = new Translation2d(
+				-10.75,
+				-10.75);
+
+		public static final Translation2d BR_TRANSLATION = new Translation2d(
+				-10.75,
+				10.75);
+
+		// mech pose logging constants
+		public static final double ELEVATOR_WINCH_DIAMETER_METERS = 0.0463296;
+		public static final double ELEVATOR_GEAR_RATIO = 10; // 25.0;
+
+		// Camera names, must match names configured on coprocessor
+		public static final String REEF_CAMERA_NAME = "Reef CV Camera";
+		public static final String STATION_CAMERA_NAME = "Station CV Camera";
+
+		// Robot to camera transforms
+		// (Not used by Limelight, configure in web UI instead)
+		public static final Transform3d ROBOT_TO_REEF_CAMERA = new Transform3d(Units.inchesToMeters(7.129),
+				-Units.inchesToMeters(4.306),
+				Units.inchesToMeters(14.56), new Rotation3d(0.0, 0.0, 0.0));
+		public static final Transform3d ROBOT_TO_STATION_CAMERA = new Transform3d(-Units.inchesToMeters(8.875),
+				-Units.inchesToMeters(9.5),
+				Units.inchesToMeters(37.596), new Rotation3d(0.0, -Math.toRadians(19), Math.PI));
+
+		// Basic filtering thresholds
+		public static final double MAX_AMBIGUITY = 0.3;
+		public static final double MAX_Z_ERROR = 0.75;
+
+		// Standard deviation baselines, for 1 meter distance and 1 tag
+		// (Adjusted automatically based on distance and # of tags)
+		public static final double LINEAR_STD_DEV_BASELINE = 0.02; // Meters
+		public static final double ANGULAR_STD_DEV_BASELINE = 0.06; // Radians
+
+		// Standard deviation multipliers for each camera
+		// (Adjust to trust some cameras more than others)
+		public static final double[] CAMERA_STD_DEV_MULTIPLIERS = new double[] {
+				1.0, // Camera 0
+				1.0 // Camera 1
+		};
+
+		// Multipliers to apply for MegaTag 2 observations
+		public static final double LINEAR_STD_MEGATAG_2_FACTOR = 0.5; // More stable than full 3D solve
+		public static final double ANGULAR_STD_MEGATAG_2_FACTOR = Double.POSITIVE_INFINITY; // No rotation data
+																							// available
+
+		// public static final double CAM_DISTANCE_READ = 2.5;
+	}
+
+	public static final class DriveConstants {
 		// Driving Parameters - Note that these are not the maximum capable speeds of
 		// the robot, rather the allowed maximum speeds
 		public static final double MAX_SPEED_METERS_PER_SECOND = 4.8;
@@ -60,14 +155,14 @@ public final class Constants {
 		public static final int kFrontRightTurningCanId = 25;
 		public static final int kRearRightTurningCanId = 27;
 
-		//====== PIDS =====//
+		// ====== PIDS =====//
 
 		// Driving
 		public static final double kDrivingP = 0.04;
 		public static final double kDrivingI = 0;
 		public static final double kDrivingD = 0;
 
-		//Turning
+		// Turning
 		public static final double kTurningP = 1;
 		public static final double kTurningI = 0;
 		public static final double kTurningD = 0;
@@ -93,7 +188,8 @@ public final class Constants {
 		// 45 teeth on the wheel's bevel gear, 22 teeth on the first-stage spur gear, 15
 		// teeth on the bevel pinion
 		public static final double DRIVING_MOTOR_REDUCTION = (45.0 * 22) / (DRIVING_MOTOR_PINION_TEETH * 15);
-		public static final double DRIVE_WHEEL_FREE_SPEED_RPS = (DRIVING_MOTOR_FREE_SPEED_RPS * WHEEL_CIRCUMFERENCE_METERS)
+		public static final double DRIVE_WHEEL_FREE_SPEED_RPS = (DRIVING_MOTOR_FREE_SPEED_RPS
+				* WHEEL_CIRCUMFERENCE_METERS)
 				/ DRIVING_MOTOR_REDUCTION;
 	}
 
@@ -121,10 +217,9 @@ public final class Constants {
 		public static final TrapezoidProfile.Constraints kThetaControllerConstraints = new TrapezoidProfile.Constraints(
 				kMaxAngularSpeedRadiansPerSecond, kMaxAngularSpeedRadiansPerSecondSquared);
 
-		
-				public static final Transform3d ROBOT_TO_REEF_CAMERA =
-		new Transform3d(Units.inchesToMeters(6), -Units.inchesToMeters(8.5),
-		0.4, new Rotation3d(0.0, 0.0, 0));
+		public static final Transform3d ROBOT_TO_REEF_CAMERA = new Transform3d(Units.inchesToMeters(6),
+				-Units.inchesToMeters(8.5),
+				0.4, new Rotation3d(0.0, 0.0, 0));
 
 		/* -- ALL GENERAL CONSTANTS -- */
 		public static final double DEG_180 = 180;
@@ -132,14 +227,13 @@ public final class Constants {
 
 		/* -- ALL SOURCE SPECIFIC CONSTANTS -- */
 		public static final double SOURCE_X_OFFSET = Units.inchesToMeters(35.5 / 2)
-			+ ROBOT_TO_REEF_CAMERA.getY();
+				+ ROBOT_TO_REEF_CAMERA.getY();
 		public static final double SOURCE_Y_OFFSET = 0;
 
 		public static final int BLUE_L_STATION_ID = 13;
 		public static final int BLUE_R_STATION_ID = 12;
 		public static final int RED_L_STATION_ID = 1;
 		public static final int RED_R_STATION_ID = 2;
-
 
 		public static final double REEF_X_TAG_OFFSET = Units.inchesToMeters(35.5 / 2 - 6);
 		public static final double REEF_Y_L_TAG_OFFSET = -Units.inchesToMeters(12) / 2;

@@ -4,6 +4,7 @@ import choreo.trajectory.SwerveSample;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
@@ -13,6 +14,7 @@ import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.Timer;
@@ -25,6 +27,7 @@ import frc.robot.input.TeleopInput;
 import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.OIConstants;
+import frc.robot.Constants.SimConstants;
 import frc.robot.vision.AprilTag;
 import frc.robot.vision.RaspberryPi;
 
@@ -108,6 +111,18 @@ public class DriveFSMSystem extends SubsystemBase {
 	private final PIDController xController = new PIDController(5, 0, 0);
 	private final PIDController yController = new PIDController(5, 0, 0);
 	private final PIDController headingController = new PIDController(0.75, 0, 0);
+
+	private final ProfiledPIDController driveController = new ProfiledPIDController(
+		AutoConstants.ALIGN_DRIVE_P, 0, 0, new TrapezoidProfile.Constraints(
+			AutoConstants.ALIGN_MAX_T_SPEED, AutoConstants.ALIGN_MAX_T_ACCEL
+		)
+	);
+
+	private final ProfiledPIDController thetaController = new ProfiledPIDController(
+		AutoConstants.ALIGN_THETA_P, 0, 0, new TrapezoidProfile.Constraints(
+			AutoConstants.ALIGN_MAX_R_SPEED, AutoConstants.ALIGN_MAX_R_ACCEL
+		)
+	);
 
 	private double driveErrorAbs;
 	private double thetaErrorAbs;
@@ -287,11 +302,7 @@ public class DriveFSMSystem extends SubsystemBase {
 			// Drive left with negative X (left) ^
 
 		if (rotXComp != 0) {
-			rotationAlignmentPose =
-				(Utils.isSimulation())
-					? getMapleSimDrivetrain().getDriveSimulation()
-					.getSimulatedDriveTrainPose().getRotation()
-					: drivetrain.getState().Pose.getRotation();
+			rotationAlignmentPose = getPose().getRotation();
 		}
 
 		if (!input.getDriveCircleButton()) {
@@ -526,10 +537,9 @@ public class DriveFSMSystem extends SubsystemBase {
 			driveToPoseRunning = true;
 			alignmentTimer.start();
 
-			ChassisSpeeds speeds = (Utils.isSimulation())
-				? getMapleSimDrivetrain().getDriveSimulation()
-					.getDriveTrainSimulatedChassisSpeedsFieldRelative()
-				: drivetrain.getState().Speeds;
+			ChassisSpeeds speeds = Robot.isSimulation() ? 
+				swerveDrive.getMapleSimDrive().get().getDriveTrainSimulatedChassisSpeedsFieldRelative()	
+				: swerveDrive.getFieldVelocity();
 
 			driveController.reset(
 				currPose.getTranslation().getDistance(target.getTranslation()),
