@@ -4,9 +4,13 @@ import choreo.trajectory.SwerveSample;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -18,6 +22,7 @@ import frc.robot.Robot;
 import frc.robot.input.TeleopInput;
 import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
+import frc.robot.Constants.OIConstants;
 import frc.robot.vision.AprilTag;
 import frc.robot.vision.RaspberryPi;
 
@@ -77,6 +82,9 @@ public class DriveFSMSystem extends SubsystemBase {
 		AutoConstants.RED_R_STATION_ID
 	};
 
+	private SlewRateLimiter slewRateX;
+	private SlewRateLimiter slewRateY;
+
 	/* -- cv constants -- */
 	private RaspberryPi rpi = new RaspberryPi();
 	private int tagID = -1;
@@ -94,6 +102,10 @@ public class DriveFSMSystem extends SubsystemBase {
 	private final PIDController yController = new PIDController(5, 0, 0);
 	private final PIDController headingController = new PIDController(0.75, 0, 0);
 
+	private double driveErrorAbs;
+	private double thetaErrorAbs;
+	private Translation2d lastSetpointTranslation;
+
 	/* ======================== Constructor ======================== */
 	/**
 	 * Create FSMSystem and initialize to starting state. Also perform any
@@ -101,7 +113,6 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * the constructor is called only once when the robot boots.
 	 */
 	public DriveFSMSystem(File directory) {
-
 		boolean blueAlliance = false;
 		Pose2d startingPose = blueAlliance ? new Pose2d(new Translation2d(Meter.of(1),
 				Meter.of(4)),
@@ -109,6 +120,9 @@ public class DriveFSMSystem extends SubsystemBase {
 				: new Pose2d(new Translation2d(Meter.of(16),
 				Meter.of(4)),
 				Rotation2d.fromDegrees(180));
+
+		slewRateX = new SlewRateLimiter(DriveConstants.SLEW_RATE);
+		slewRateY = new SlewRateLimiter(DriveConstants.SLEW_RATE);
 
 		// Perform hardware init
 		SwerveDriveTelemetry.verbosity = SwerveDriveTelemetry.TelemetryVerbosity.HIGH;
@@ -254,17 +268,17 @@ public class DriveFSMSystem extends SubsystemBase {
 		}
 
 		double xSpeed = MathUtil.applyDeadband(
-			slewRateX.calculate(input.getDriveLeftJoystickY()), DriveConstants.JOYSTICK_DEADBAND
+			slewRateX.calculate(input.getDriveLeftJoystickY()), OIConstants.DRIVE_DEADBAND
 			) * MAX_SPEED / constantDamp;
 			// Drive forward with negative Y (forward) ^
 
 		double ySpeed = MathUtil.applyDeadband(
-			slewRateY.calculate(input.getDriveLeftJoystickX()), DriveConstants.JOYSTICK_DEADBAND
+			slewRateY.calculate(input.getDriveLeftJoystickX()), OIConstants.DRIVE_DEADBAND
 			) * MAX_SPEED / constantDamp;
 			// Drive left with negative X (left) ^
 
 		double rotXComp = MathUtil.applyDeadband(
-			input.getDriveRightJoystickX(), DriveConstants.JOYSTICK_DEADBAND)
+			input.getDriveRightJoystickX(), OIConstants.DRIVE_DEADBAND)
 			* MAX_ANGULAR_RATE / constantDamp;
 			// Drive left with negative X (left) ^
 
@@ -405,6 +419,234 @@ public class DriveFSMSystem extends SubsystemBase {
 		} else {
 			drivetrain.setControl(brake);
 		}	
+	}
+
+	private void handleTagAlignment(TeleopInput input, int id, boolean allianceFlip) {
+		AprilTag tag = rpi.getAprilTagWithID(id);
+		Pose2d currPose;
+
+		if (Utils.isSimulation()) {
+			currPose = getMapleSimDrivetrain().getDriveSimulation().getSimulatedDriveTrainPose();
+		} else {
+			currPose = drivetrain.getState().Pose;
+		}
+
+		Transform3d robotToCamera;
+		if (aligningToReef) {
+		//TODO: make a reef and station alignment hepler function instead of just one.
+			// robotToCamera =
+			// new Transform2d(
+			// 	SimConstants.ROBOT_TO_REEF_CAMERA.getTranslation().getX(),
+			// 		// - if u use pose rotation.
+			// 	SimConstants.ROBOT_TO_REEF_CAMERA.getTranslation().getY(),
+			// 		// - if u use pose rotation.
+			// 	SimConstants.ROBOT_TO_REEF_CAMERA.getRotation().toRotation2d()
+			// );
+			robotToCamera = SimConstants.ROBOT_TO_REEF_CAMERA;
+		} else {
+			robotToCamera =
+			new Transform3d(
+				SimConstants.ROBOT_TO_STATION_CAMERA.getTranslation(),
+				SimConstants.ROBOT_TO_STATION_CAMERA.getRotation()
+				.rotateBy(new Rotation3d(Rotation2d.k180deg))
+			);
+			//robotToCamera = SimConstants.ROBOT_TO_STATION_CAMERA;
+		}
+
+		System.out.println("TAG Reached here");
+
+		if (tag != null) {
+			if (Robot.isSimulation()) {
+				alignmentPose2d =
+					new Pose3d(
+						currPose
+					)
+					.transformBy(robotToCamera)
+					.plus(new Transform3d(
+						tag.getZ(),
+						(tag.getX()),
+						0.0,
+						new Rotation3d(
+							new Rotation2d(-tag.getPitch())
+						)
+					))
+					.transformBy(robotToCamera.inverse())
+					.toPose2d()
+					.transformBy(
+						new Transform2d(
+							-alignmentXOff,
+							-alignmentYOff,
+							new Rotation2d()
+						)
+					);
+
+			} else {
+				alignmentPose2d =
+					new Pose3d(
+						currPose
+					)
+					.transformBy(robotToCamera)
+					.plus(new Transform3d(
+						tag.getZ(),
+						(tag.getX()),
+						0.0,
+						new Rotation3d(
+							new Rotation2d(-tag.getPitch())
+						)
+					))
+					.transformBy(robotToCamera.inverse())
+					.toPose2d()
+					.transformBy(
+						new Transform2d(
+							-alignmentXOff,
+							-alignmentYOff,
+							new Rotation2d()
+						)
+					);
+			}
+		}
+
+		if (alignmentPose2d != null) {
+			driveToPose(alignmentPose2d, allianceFlip);
+		}
+
+		if (driveToPoseFinished || alignmentPose2d == null) {
+			drivetrain.setControl(
+				drive.withVelocityX(0)
+				.withVelocityY(0)
+				.withRotationalRate(0)
+			);
+			return;
+		}
+
+	}
+
+	public boolean driveToPose(Pose2d target, boolean allianceFlip) {
+		Pose2d currPose = getPose(); 
+
+		if (!driveToPoseRunning) {
+			driveToPoseRunning = true;
+			alignmentTimer.start();
+
+			ChassisSpeeds speeds = (Utils.isSimulation())
+				? getMapleSimDrivetrain().getDriveSimulation()
+					.getDriveTrainSimulatedChassisSpeedsFieldRelative()
+				: drivetrain.getState().Speeds;
+
+			driveController.reset(
+				currPose.getTranslation().getDistance(target.getTranslation()),
+				Math.min(
+					0.0,
+					-new Translation2d(
+						speeds.vxMetersPerSecond,
+						speeds.vyMetersPerSecond
+					).rotateBy(
+						target.getTranslation()
+						.minus(currPose.getTranslation())
+						.getAngle()
+						.unaryMinus()
+					).getX()
+				)
+			);
+
+			thetaController.reset(currPose.getRotation().getRadians(),
+				speeds.omegaRadiansPerSecond);
+			lastSetpointTranslation = currPose.getTranslation();
+		}
+
+		double currDistance = currPose.getTranslation().getDistance(target.getTranslation());
+		double ffScaler = MathUtil.clamp(
+			(currDistance - AutoConstants.FF_MIN_RADIUS)
+				/ (AutoConstants.FF_MAX_RADIUS - AutoConstants.FF_MIN_RADIUS),
+			0.0,
+			1.0
+		);
+
+		driveErrorAbs = currDistance;
+
+		driveController.reset(
+			lastSetpointTranslation.getDistance(target.getTranslation()),
+			driveController.getSetpoint().velocity
+		);
+
+		double driveVelocityScalar = driveController.getSetpoint().velocity * ffScaler
+			+ driveController.calculate(driveErrorAbs, 0.0);
+		if (currDistance < driveController.getPositionTolerance()) {
+			driveVelocityScalar = 0.0;
+		}
+
+		lastSetpointTranslation = new Pose2d(
+			target.getTranslation(),
+			currPose.getTranslation().minus(target.getTranslation()).getAngle()
+		).transformBy(
+			new Transform2d(
+				new Translation2d(driveController.getSetpoint().position, 0.0),
+				new Rotation2d()
+			)
+		).getTranslation();
+
+		// Calculate theta speed
+		double thetaVelocity = thetaController.getSetpoint().velocity * ffScaler
+			+ thetaController.calculate(
+				currPose.getRotation().getRadians(), target.getRotation().getRadians()
+		);
+
+		thetaErrorAbs = Math.abs(
+			currPose.getRotation().minus(target.getRotation()).getRadians()
+		);
+
+		if (thetaErrorAbs < thetaController.getPositionTolerance()) {
+			thetaVelocity = 0.0;
+		}
+
+		// Command speeds
+		var driveVelocity = new Pose2d(
+			new Translation2d(),
+			currPose.getTranslation().minus(target.getTranslation())
+			.getAngle()
+		).transformBy(
+			new Transform2d(
+				new Translation2d(driveVelocityScalar, 0.0),
+				new Rotation2d()
+			)
+		).getTranslation();
+
+		drivetrain.setControl(
+			driveFacingAngle.
+				withVelocityX(
+					driveVelocity.getX()
+				)
+				.withVelocityY(
+					driveVelocity.getY()
+				)
+				.withTargetRateFeedforward(thetaVelocity)
+				.withTargetDirection(target.getRotation())
+				.withHeadingPID(DriveConstants.HEADING_P / 10.0, 0, 0)
+
+		);
+		//drivetrain.setControl(brake);
+
+		rotationAlignmentPose = currPose.getRotation();
+
+		driveToPoseFinished = driveController.atGoal() && thetaController.atGoal();
+
+		if (driveToPoseFinished) {
+			alignmentTimer.stop();
+			alignmentTimer.reset();
+			drivetrain.setControl(brake);
+		}
+
+		Logger.recordOutput("DriveToPose/DriveError", driveErrorAbs);
+		Logger.recordOutput("DriveToPose/ThetaError", thetaErrorAbs);
+		Logger.recordOutput("DriveToPose/DriveVelocity", driveVelocityScalar);
+		Logger.recordOutput("DriveToPose/ThetaVelocity", thetaVelocity);
+		Logger.recordOutput("DriveToPose/DriveFinished", driveToPoseFinished);
+		Logger.recordOutput("DriveToPose/DriveSetpoint", driveController.getSetpoint().position);
+		Logger.recordOutput("DriveToPose/ThetaSetpoint", thetaController.getSetpoint().position);
+		Logger.recordOutput("DriveToPose/Time", alignmentTimer.get());
+		Logger.recordOutput("DriveToPose/TargetPose", target);
+
+		return driveToPoseFinished;
 	}
 
 	public void followTrajectory(SwerveSample sample) {
