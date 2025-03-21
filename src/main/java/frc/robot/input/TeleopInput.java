@@ -2,6 +2,8 @@ package frc.robot.input;
 
 // WPILib Imports
 import edu.wpi.first.wpilibj.PS4Controller;
+import swervelib.SwerveDrive;
+import swervelib.SwerveInputStream;
 
 /**
  * Common class for providing driver inputs during Teleop.
@@ -14,11 +16,12 @@ public class TeleopInput {
 	/* ======================== Constants ======================== */
 	private static final int DRIVE_CONTROLLER_PORT = 0;
 	private static final int MECH_CONTROLLER_PORT = 1;
-
+	
 	/* ======================== Private variables ======================== */
 	// Input objects
 	private PS4Controller mechController;
 	private PS4Controller driveController;
+
 	/* ======================== Constructor ======================== */
 	/**
 	 * Create a TeleopInput and register input devices. Note that while inputs

@@ -1,5 +1,6 @@
 package frc.robot.systems;
 
+import choreo.auto.AutoFactory;
 import choreo.trajectory.SwerveSample;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.math.MathUtil;
@@ -34,6 +35,7 @@ import frc.robot.vision.RaspberryPi;
 import jdk.jshell.spi.ExecutionControl;
 import org.littletonrobotics.junction.Logger;
 import swervelib.SwerveDrive;
+import swervelib.SwerveInputStream;
 import swervelib.parser.SwerveParser;
 import swervelib.telemetry.SwerveDriveTelemetry;
 
@@ -42,6 +44,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import static edu.wpi.first.units.Units.Meter;
+import static edu.wpi.first.units.Units.Rotation;
 
 public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
@@ -128,6 +131,8 @@ public class DriveFSMSystem extends SubsystemBase {
 	private double thetaErrorAbs;
 	private Translation2d lastSetpointTranslation;
 
+	private Timer alignmentTimer = new Timer();
+
 	/* ======================== Constructor ======================== */
 	/**
 	 * Create FSMSystem and initialize to starting state. Also perform any
@@ -156,6 +161,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
+
 		swerveDrive.setHeadingCorrection(false);
 		swerveDrive.setCosineCompensator(Robot.isReal());
 		swerveDrive.setAngularVelocityCompensation(true, true, 0.1);
@@ -205,6 +211,13 @@ public class DriveFSMSystem extends SubsystemBase {
 		if (input == null) {
 			return;
 		}
+
+		Logger.recordOutput("Robot Heading", SwerveDriveTelemetry.robotRotation);
+		Logger.recordOutput("Measured Chassis Speeds", SwerveDriveTelemetry.measuredChassisSpeedsObj);
+		Logger.recordOutput("Desired Chassis Speeds", SwerveDriveTelemetry.desiredChassisSpeedsObj);
+		Logger.recordOutput("Measured Module States", SwerveDriveTelemetry.measuredStatesObj);
+		Logger.recordOutput("Desired Module States", SwerveDriveTelemetry.desiredStatesObj);
+
 
 		switch (currentState) {
 			case TELEOP_STATE:
@@ -305,24 +318,26 @@ public class DriveFSMSystem extends SubsystemBase {
 			rotationAlignmentPose = getPose().getRotation();
 		}
 
+		var driveAngularVelocity = SwerveInputStream.of(
+					swerveDrive, () -> input.getDriveLeftJoystickY(), () -> input.getDriveLeftJoystickX()
+				)
+				.withControllerRotationAxis(() -> -rotXComp) 
+				.deadband(OIConstants.DRIVE_DEADBAND)
+				.scaleTranslation(0.8)
+				.allianceRelativeControl(true);
+
 		if (!input.getDriveCircleButton()) {
-			drivetrain.setControl(
-				driveFacingAngle.withVelocityX(xSpeed * allianceOriented.getAsInt())
-				.withVelocityY(ySpeed * allianceOriented.getAsInt())
-				.withTargetDirection(rotationAlignmentPose)
-				.withTargetRateFeedforward(-rotXComp)
-				.withHeadingPID(DriveConstants.HEADING_P, 0, 0)
-			);
+			swerveDrive.driveFieldOriented(driveAngularVelocity.get());
 		} else {
-			drivetrain.setControl(
-				driveRobotCentric.withVelocityX(xSpeed * allianceOriented.getAsInt())
-				.withVelocityY(ySpeed * allianceOriented.getAsInt())
-				.withRotationalRate(-rotXComp)
-			);
+			var driveRobotOriented = driveAngularVelocity.copy()
+				.robotRelative(true)
+				.allianceRelativeControl(false);
+			
+			swerveDrive.drive(driveRobotOriented.get());
 		}
 
 		if (input.getSeedGyroButtonPressed()) {
-			drivetrain.seedFieldCentric();
+			//drivetrain.seedFieldCentric();
 			rotationAlignmentPose = new Rotation2d();
 			hasLocalized = false;
 		}
@@ -384,7 +399,7 @@ public class DriveFSMSystem extends SubsystemBase {
 			aligningToReef = true;
 			handleTagAlignment(input, tagID, true);
 		} else {
-			drivetrain.setControl(brake);
+			drivetrainBrake();
 		}
 	}
 
@@ -432,7 +447,7 @@ public class DriveFSMSystem extends SubsystemBase {
 			aligningToReef = false;
 			handleTagAlignment(input, tagID, true);
 		} else {
-			drivetrain.setControl(brake);
+			drivetrainBrake();
 		}	
 	}
 
@@ -520,11 +535,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		}
 
 		if (driveToPoseFinished || alignmentPose2d == null) {
-			drivetrain.setControl(
-				drive.withVelocityX(0)
-				.withVelocityY(0)
-				.withRotationalRate(0)
-			);
+			drivetrainBrake();
 			return;
 		}
 
@@ -618,21 +629,13 @@ public class DriveFSMSystem extends SubsystemBase {
 				new Rotation2d()
 			)
 		).getTranslation();
+		
+		SwerveInputStream swerveInputStream = SwerveInputStream.of(
+			swerveDrive, () -> driveVelocity.getX(), () -> driveVelocity.getY()
+		)
+		.withControllerHeadingAxis(() -> target.getRotation().getCos(), () -> target.getRotation().getSin());
 
-		drivetrain.setControl(
-			driveFacingAngle.
-				withVelocityX(
-					driveVelocity.getX()
-				)
-				.withVelocityY(
-					driveVelocity.getY()
-				)
-				.withTargetRateFeedforward(thetaVelocity)
-				.withTargetDirection(target.getRotation())
-				.withHeadingPID(DriveConstants.HEADING_P / 10.0, 0, 0)
-
-		);
-		//drivetrain.setControl(brake);
+		swerveDrive.driveFieldOriented(swerveInputStream.get());
 
 		rotationAlignmentPose = currPose.getRotation();
 
@@ -641,7 +644,8 @@ public class DriveFSMSystem extends SubsystemBase {
 		if (driveToPoseFinished) {
 			alignmentTimer.stop();
 			alignmentTimer.reset();
-			drivetrain.setControl(brake);
+			drivetrainBrake();
+			swerveDrive.zeroGyro();
 		}
 
 		Logger.recordOutput("DriveToPose/DriveError", driveErrorAbs);
@@ -733,7 +737,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		class BrakeCommand extends Command {
 			@Override
 			public boolean isFinished() {
-				drivetrain.setControl(brake);
+				swerveDrive.setMotorIdleMode(true);
 				return true;
 			}
 		}
@@ -797,5 +801,19 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	public void resetOdometry(Pose2d pose) {
 		swerveDrive.resetOdometry(pose);
+	}
+
+	public AutoFactory configureAutoSettings() {
+		return new AutoFactory(
+			() -> getPose(),
+			this::resetOdometry,
+			this::followTrajectory,
+			true,
+			this	
+		);
+	}
+
+	public void drivetrainBrake() {
+		swerveDrive.drive(new ChassisSpeeds(0, 0, 0));
 	}
 }
