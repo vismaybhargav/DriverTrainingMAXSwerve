@@ -146,8 +146,8 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * 
 	 * @return if the action carried out in this state has finished executing
 	 */
-	public boolean updateAutonomous() throws ExecutionControl.NotImplementedException {
-		throw new ExecutionControl.NotImplementedException("TODO: Implement autonomous mode");
+	public boolean updateAutonomous() {
+		return true;
 	}
 
 	/* ======================== Private methods ======================== */
