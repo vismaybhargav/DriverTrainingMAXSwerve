@@ -6,17 +6,31 @@ import com.studica.frc.AHRS;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
+import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
 import frc.robot.input.TeleopInput;
+import frc.robot.vision.AprilTag;
+import frc.robot.vision.rpi.RaspberryPi;
+import frc.robot.vision.rpi.RaspberryPiPhoton;
 import frc.robot.MAXSwerveModule;
+import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
-
+import frc.robot.Constants.SimConstants;
 import jdk.jshell.spi.ExecutionControl;
+
+import java.util.ArrayList;
+
+import org.jcp.xml.dsig.internal.dom.Utils;
 import org.littletonrobotics.junction.Logger;
 
 public class DriveFSMSystem extends SubsystemBase {
@@ -24,7 +38,8 @@ public class DriveFSMSystem extends SubsystemBase {
 	// FSM state definitions
 	public enum FSMState {
 		TELEOP_STATE,
-		ALIGN_TO_TAG_STATE
+		ALIGN_TO_REEF_TAG_STATE,
+		ALIGN_TO_STATION_TAG_STATE
 	}
 
 	/* ======================== Private variables ======================== */
@@ -53,6 +68,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		DriveConstants.kBackRightChassisAngularOffset);
 
 	private final AHRS gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
+	private final RaspberryPi rpi = new RaspberryPiPhoton(); 
 
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
 			DriveConstants.kDriveKinematics,
@@ -118,26 +134,23 @@ public class DriveFSMSystem extends SubsystemBase {
 	 *              the robot is in autonomous mode.
 	 */
 	public void update(TeleopInput input) {
-		if (input == null)
+		if (input == null) {
 			return;
-
-		switch (currentState) {
-			case TELEOP_STATE -> {
-				// Reset all the auto logic when we go into the teleop state.
-				if (alignmentTranslation2d != null) {
-					alignmentTranslation2d = null;
-					rotationCache2d = 0;
-					tagPositionAligned = false;
-				}
-				handleTeleopState(input);
-			}
-			case ALIGN_TO_TAG_STATE -> handleAlignToTagState();
-			default -> throw new IllegalStateException("Invalid state: " + currentState);
 		}
 
-		Logger.recordOutput("DriveFSM/Current State", currentState);
-		Logger.recordOutput("DriveFSM/TeleOp/Swerve States", getModuleStates());
-
+		switch (currentState) {
+			case TELEOP_STATE:
+				handleTeleOpState(input);
+				break;
+			case ALIGN_TO_REEF_TAG_STATE:
+				handleReefTagAlignment(input);
+				break;
+			case ALIGN_TO_STATION_TAG_STATE:
+				handleStationTagAlignment(input);
+				break;
+			default:
+				throw new IllegalStateException("Invalid state: " + currentState.toString());
+		}
 		currentState = nextState(input);
 	}
 
@@ -182,7 +195,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	/* ------------------------ FSM state handlers ------------------------ */
-	private void handleTeleopState(TeleopInput input) {
+	private void handleTeleOpState(TeleopInput input) {
 		// Get joystick inputs
 		var xInput = input.getDriveControllerLeftY(); // Up and down on the left stick
 		var yInput = input.getDriveControllerLeftX(); // Left and right on the left stick
@@ -221,41 +234,213 @@ public class DriveFSMSystem extends SubsystemBase {
 		}
 	}
 
-	private void handleAlignToTagState() {
-		return;
-		/*
-		var tag = rpi.getAprilTagWithID(9);
+	/**
+	 * Handles reef tag alignment by seeing the nearest reef tag.
+	 * @param input
+	 */
+	public void handleReefTagAlignment(TeleopInput input) {
 
-		if (tag != null && !tagPositionAligned) {
-			double rpiX = tag.getZ();
-			double rpiY = tag.getX();
-			double rpiTheta = tag.getPitch();
-
-			double xSpeed = Math.abs(rpiX) < Constants.VisionConstants.X_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiX / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
-					: 0;
-
-			double ySpeed = Math.abs(rpiY) < Constants.VisionConstants.Y_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiY / Constants.VisionConstants.TRANSLATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND,
-							Constants.VisionConstants.MAX_SPEED_METERS_PER_SECOND)
-					: 0;
-
-			double aSpeed = Math.abs(rpiTheta) < Constants.VisionConstants.ROT_MARGIN_TO_REEF
-					? MAXSwerveModule.clamp(
-							rpiTheta / Constants.VisionConstants.ROTATIONAL_ACCEL_CONSTANT,
-							-Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND,
-							Constants.VisionConstants.MAX_ANGULAR_SPEED_RADIANS_PER_SECOND)
-					: 0;
-
-			drive(ChassisSpeeds.fromFieldRelativeSpeeds(
-					xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
+		if (input != null) {
+			if (input.getAlignLeftOffsetButton()) {
+				alignmentYOff = AutoConstants.REEF_Y_L_TAG_OFFSET;
+			} else if (input.getAlignRightOffsetButton()) {
+				alignmentYOff = AutoConstants.REEF_Y_R_TAG_OFFSET;
+			} else {
+				alignmentYOff = AutoConstants.REEF_Y_L_TAG_OFFSET;
+			}
 		}
-					*/
+
+		alignmentXOff = AutoConstants.REEF_X_TAG_OFFSET;
+
+		ArrayList<AprilTag> sortedTagList = rpi.getReefAprilTags();
+
+		if (DriverStation.getAlliance().get().equals(Alliance.Blue) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				if (tagID == -1) {
+					for (int id: blueReefTagArray) {
+						if (tag.getTagID() == id) {
+							tagID = id;
+							break;
+						}
+					}
+				} else {
+					break;
+				}
+			}
+
+		} else if (DriverStation.getAlliance().get().equals(Alliance.Red) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				if (tagID == -1) {
+					for (int id: redReefTagArray) {
+						if (tag.getTagID() == id) {
+							tagID = id;
+							break;
+						}
+					}
+				} else {
+					break;
+				}
+			}
+
+		}
+
+		Logger.recordOutput("TagID", tagID);
+
+		if (tagID != -1) {
+			aligningToReef = true;
+			handleTagAlignment(input, tagID, true);
+		} else {
+			drivetrain.setControl(brake);
+		}
+	}
+
+	/**
+	 * Handles station tag alignment by aligning with the nearest station tag.
+	 * @param input
+	 */
+	public void handleStationTagAlignment(TeleopInput input) {
+
+		if (input != null) {
+			if (input.getAlignLeftOffsetButton()) {
+				alignmentYOff = AutoConstants.STATION_Y_L_TAG_OFFSET;
+			} else if (input.getAlignRightOffsetButton()) {
+				alignmentYOff = AutoConstants.STATION_Y_R_TAG_OFFSET;
+			} else {
+				alignmentYOff = 0;
+			}
+		}
+
+		alignmentXOff = -AutoConstants.SOURCE_X_OFFSET;
+
+		ArrayList<AprilTag> sortedTagList = rpi.getStationAprilTags();
+
+		if (DriverStation.getAlliance().get().equals(Alliance.Blue) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				for (int id: blueStationTagArray) {
+					if (tag.getTagID() == id) {
+						tagID = id;
+						break;
+					}
+				}
+			}
+
+		} else if (DriverStation.getAlliance().get().equals(Alliance.Red) && tagID == -1) {
+			for (AprilTag tag: sortedTagList) {
+				for (int id: redStationTagArray) {
+					if (tag.getTagID() == id) {
+						tagID = id;
+						break;
+					}
+				}
+			}
+
+		}
+
+		Logger.recordOutput("TagID", tagID);
+
+		if (tagID != -1) {
+			aligningToReef = false;
+			handleTagAlignment(input, tagID, true);
+		} else {
+			drivetrain.setControl(brake);
+		}
+	}
+
+	/**
+	 * Handle tag alignment state.
+	 * @param input
+	 * @param id
+	 * @param allianceFlip whether or not to invert the controls.
+	 * allianceFlip should be true in TeleOp.
+	 */
+	private void handleTagAlignment(TeleopInput input, int id, boolean allianceFlip) {
+		AprilTag tag = rpi.getAprilTagWithID(id);
+		Pose2d currPose;
+
+		if (Utils.isSimulation()) {
+			currPose = getMapleSimDrivetrain().getDriveSimulation().getSimulatedDriveTrainPose();
+		} else {
+			currPose = drivetrain.getState().Pose;
+		}
+
+		Transform3d robotToCamera;
+		if (aligningToReef) {
+		//TODO: make a reef and station alignment hepler function instead of just one.
+			// robotToCamera =
+			// new Transform2d(
+			// 	SimConstants.ROBOT_TO_REEF_CAMERA.getTranslation().getX(),
+			// 		// - if u use pose rotation.
+			// 	SimConstants.ROBOT_TO_REEF_CAMERA.getTranslation().getY(),
+			// 		// - if u use pose rotation.
+			// 	SimConstants.ROBOT_TO_REEF_CAMERA.getRotation().toRotation2d()
+			// );
+			robotToCamera = SimConstants.ROBOT_TO_REEF_CAMERA;
+		} else {
+			robotToCamera =
+			new Transform3d(
+				SimConstants.ROBOT_TO_STATION_CAMERA.getTranslation(),
+				new Rotation3d(0, SimConstants.STATION_CAMERA_RAD, 0)
+				//.rotateBy(new Rotation3d(Rotation2d.k180deg))
+			);
+			//robotToCamera = SimConstants.ROBOT_TO_STATION_CAMERA;
+		}
+
+		System.out.println("TAG Reached here");
+
+		if (tag != null) {
+			alignmentPose2d =
+				new Pose3d(
+					currPose
+				)
+				.transformBy(robotToCamera)
+				.plus(new Transform3d(
+					tag.getZ(),
+					(tag.getX()),
+					-tag.getY(),
+					new Rotation3d(
+						new Rotation2d(-tag.getPitch())
+					)
+				))
+				.toPose2d()
+				.transformBy(
+					new Transform2d(
+						-alignmentXOff,
+						-alignmentYOff,
+						new Rotation2d()
+					)
+				);
+		}
+
+		if (alignmentPose2d != null) {
+			if (tag != null) {
+				Logger.recordOutput(
+					"TransposedTag",
+					new Pose3d(
+						currPose
+					)
+					.transformBy(robotToCamera)
+					.plus(new Transform3d(
+						tag.getZ(),
+						(tag.getX()),
+						-tag.getY(),
+						new Rotation3d(
+							new Rotation2d(-tag.getPitch())
+						)
+					))
+				);
+			}
+			driveToPose(alignmentPose2d, allianceFlip);
+		}
+
+		if (driveToPoseFinished || alignmentPose2d == null) {
+			drivetrain.setControl(
+				drive.withVelocityX(0)
+				.withVelocityY(0)
+				.withRotationalRate(0)
+			);
+			return;
+		}
+
 	}
 
 	public void followTrajectory(SwerveSample sample) {
