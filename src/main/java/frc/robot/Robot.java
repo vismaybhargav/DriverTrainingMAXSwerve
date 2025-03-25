@@ -7,7 +7,6 @@ package frc.robot;
 
 // Systems
 import choreo.auto.AutoFactory;
-import edu.wpi.first.wpilibj.PowerDistribution;
 import frc.robot.input.TeleopInput;
 import frc.robot.systems.DriveFSMSystem;
 import org.littletonrobotics.junction.LogFileUtil;
@@ -42,8 +41,7 @@ public class Robot extends LoggedRobot {
 		// ==== Set Up Logging ==== //
 		if(isReal()) {
 			Logger.addDataReceiver(new NT4Publisher());
-			Logger.addDataReceiver(new WPILOGWriter());
-			new PowerDistribution(1, PowerDistribution.ModuleType.kRev);
+			//Logger.addDataReceiver(new WPILOGWriter());
 		} else if(isSimulation()) {
 			Logger.addDataReceiver(new NT4Publisher());
 		} else {
@@ -58,18 +56,16 @@ public class Robot extends LoggedRobot {
 		Logger.start(); // Begin logging
 
 		// Instantiate all systems here
-		if(HardwareMap.isDriveHardwarePresent()) {
-			driveSystem = new DriveFSMSystem();
-		}
+		driveSystem = new DriveFSMSystem();
 
 		// TODO: Are we using this or the new architecture?
-		autoFactory = new AutoFactory(
-				driveSystem::getPose,
-				driveSystem::resetOdometry,
-				driveSystem::followTrajectory,
-				true,
-				driveSystem
-		);
+		// autoFactory = new AutoFactory(
+		// 		driveSystem::getPose,
+		// 		driveSystem::resetOdometry,
+		// 		driveSystem::followTrajectory,
+		// 		true,
+		// 		driveSystem
+		// );
 	}
 
 	@Override
@@ -84,10 +80,12 @@ public class Robot extends LoggedRobot {
 	@Override
 	public void teleopInit() {
 		System.out.println("-------- Teleop Init --------");
+		driveSystem.reset();
 	}
 
 	@Override
 	public void teleopPeriodic() {
+		driveSystem.update(input);
 	}
 
 	@Override

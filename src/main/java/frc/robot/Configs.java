@@ -13,27 +13,29 @@ public final class Configs {
 
         static {
             // Use module constants to calculate conversion factors and feed forward gain.
-            double drivingFactor = ModuleConstants.WHEEL_DIAMETER_METERS * Math.PI
-                    / ModuleConstants.DRIVING_MOTOR_REDUCTION;
+            double drivingFactor = ModuleConstants.kWheelDiameterMeters * Math.PI
+                    / ModuleConstants.kDrivingMotorReduction;
             double turningFactor = 2 * Math.PI;
-            double drivingVelocityFeedForward = 1 / ModuleConstants.DRIVE_WHEEL_FREE_SPEED_RPS;
+            double drivingVelocityFeedForward = 1 / ModuleConstants.kDriveWheelFreeSpeedRps;
 
             drivingConfig
                     .idleMode(IdleMode.kBrake)
-                    .smartCurrentLimit(50);
+                    .smartCurrentLimit(Constants.DriveConstants.kDrivingCurrentLimitAmps);
             drivingConfig.encoder
                     .positionConversionFactor(drivingFactor) // meters
                     .velocityConversionFactor(drivingFactor / 60.0); // meters per second
             drivingConfig.closedLoop
                     .feedbackSensor(FeedbackSensor.kPrimaryEncoder)
                     // These are example gains you may need to them for your own robot!
-                    .pid(0.04, 0, 0)
+                    .pid(Constants.DriveConstants.kDrivingP, 
+                        Constants.DriveConstants.kDrivingI, 
+                        Constants.DriveConstants.kDrivingD)
                     .velocityFF(drivingVelocityFeedForward)
                     .outputRange(-1, 1);
 
             turningConfig
                     .idleMode(IdleMode.kBrake)
-                    .smartCurrentLimit(20);
+                    .smartCurrentLimit(Constants.DriveConstants.kTurningCurrentLimitAmps);
             turningConfig.absoluteEncoder
                     // Invert the turning encoder, since the output shaft rotates in the opposite
                     // direction of the steering motor in the MAXSwerve Module.
@@ -43,7 +45,9 @@ public final class Configs {
             turningConfig.closedLoop
                     .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
                     // These are example gains you may need to them for your own robot!
-                    .pid(1, 0, 0)
+                    .pid(Constants.DriveConstants.kTurningP, 
+                        Constants.DriveConstants.kTurningI, 
+                        Constants.DriveConstants.kTurningD)
                     .outputRange(-1, 1)
                     // Enable PID wrap around for the turning motor. This will allow the PID
                     // controller to go through 0 to get to the setpoint i.e. going from 350 degrees

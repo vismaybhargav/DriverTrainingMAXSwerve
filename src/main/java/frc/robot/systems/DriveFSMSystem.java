@@ -15,7 +15,6 @@ import frc.robot.Constants;
 import frc.robot.input.TeleopInput;
 import frc.robot.MAXSwerveModule;
 import frc.robot.Constants.DriveConstants;
-import frc.robot.vision.RaspberryPi;
 
 import jdk.jshell.spi.ExecutionControl;
 import org.littletonrobotics.junction.Logger;
@@ -33,15 +32,30 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	// Hardware devices should be owned by one and only one system. They must
 	// be private to their owner system and may not be used elsewhere.
-	private final MAXSwerveModule frontLeft;
-	private final MAXSwerveModule frontRight;
-	private final MAXSwerveModule rearLeft;
-	private final MAXSwerveModule rearRight;
-	private final AHRS gyro;
-	private final RaspberryPi rpi;
+	private final MAXSwerveModule frontLeft = new MAXSwerveModule(
+		DriveConstants.kFrontLeftDrivingCanId, 
+		DriveConstants.kFrontLeftTurningCanId, 
+		DriveConstants.kFrontLeftChassisAngularOffset);
+
+	private final MAXSwerveModule frontRight = new MAXSwerveModule(
+		DriveConstants.kFrontRightDrivingCanId, 
+		DriveConstants.kFrontRightTurningCanId, 
+		DriveConstants.kFrontRightChassisAngularOffset);
+
+	private final MAXSwerveModule rearLeft = new MAXSwerveModule(
+		DriveConstants.kRearLeftDrivingCanId, 
+		DriveConstants.kRearLeftTurningCanId, 
+		DriveConstants.kBackLeftChassisAngularOffset);
+
+	private final MAXSwerveModule rearRight = new MAXSwerveModule(
+		DriveConstants.kRearRightDrivingCanId, 
+		DriveConstants.kRearRightTurningCanId, 
+		DriveConstants.kBackRightChassisAngularOffset);
+
+	private final AHRS gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
 
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
-			DriveConstants.DRIVE_KINEMATICS,
+			DriveConstants.kDriveKinematics,
 			Rotation2d.fromDegrees(getHeading()),
 			getModulePositions());
 
@@ -64,29 +78,6 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	public DriveFSMSystem() {
 		// Perform hardware init
-		frontLeft = new MAXSwerveModule(
-				DriveConstants.FRONT_LEFT_DRIVING_CAN_ID,
-				DriveConstants.FRONT_LEFT_TURNING_CAN_ID,
-				DriveConstants.FRONT_LEFT_CHASSIS_ANGULAR_OFFSET);
-
-		frontRight = new MAXSwerveModule(
-				DriveConstants.FRONT_RIGHT_DRIVING_CAN_ID,
-				DriveConstants.FRONT_RIGHT_TURNING_CAN_ID,
-				DriveConstants.FRONT_RIGHT_CHASSIS_ANGULAR_OFFSET);
-
-		rearLeft = new MAXSwerveModule(
-				DriveConstants.REAR_LEFT_DRIVING_CAN_ID,
-				DriveConstants.REAR_LEFT_TURNING_CAN_ID,
-				DriveConstants.BACK_LEFT_CHASSIS_ANGULAR_OFFSET);
-
-		rearRight = new MAXSwerveModule(
-				DriveConstants.REAR_RIGHT_DRIVING_CAN_ID,
-				DriveConstants.REAR_RIGHT_TURNING_CAN_ID,
-				DriveConstants.BACK_RIGHT_CHASSIS_ANGULAR_OFFSET);
-
-		gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
-		rpi = new RaspberryPi();
-
 		headingController.enableContinuousInput(-Math.PI, Math.PI);
 
 		// Reset state machine
@@ -204,18 +195,18 @@ public class DriveFSMSystem extends SubsystemBase {
 		// Calculate speeds
 		// Clamping the speeds here might be redundant as the kinematics should already
 		// do this.
-		var xSpeed = -MathUtil.applyDeadband(
-				xInput, Constants.OIConstants.DRIVE_DEADBAND)
-				* DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
+		double xSpeed = -MathUtil.applyDeadband(
+				xInput, Constants.OIConstants.kDriveDeadband)
+				* DriveConstants.kMaxSpeedMetersPerSecond / 2;
 
-		var ySpeed = -MathUtil.applyDeadband(
-				yInput, Constants.OIConstants.DRIVE_DEADBAND)
-				* DriveConstants.MAX_SPEED_METERS_PER_SECOND / DriveConstants.SPEED_DAMP_FACTOR;
+		double ySpeed = -MathUtil.applyDeadband(
+				yInput, Constants.OIConstants.kDriveDeadband)
+				* DriveConstants.kMaxSpeedMetersPerSecond / 2;
 
 		// Rotational Speed
-		var aSpeed = -MathUtil.applyDeadband(
-				rotInput, Constants.OIConstants.DRIVE_DEADBAND)
-				* DriveConstants.MAX_ANGULAR_SPEED_RAD_PER_SEC / DriveConstants.SPEED_DAMP_FACTOR;
+		double aSpeed = -MathUtil.applyDeadband(
+				rotInput, Constants.OIConstants.kDriveDeadband)
+				* DriveConstants.kMaxSpeedMetersPerSecond / 2;
 
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/X-Speed", xSpeed);
 		Logger.recordOutput("DriveFSM/TeleOp/Speeds/Y-Speed", ySpeed);
@@ -231,6 +222,8 @@ public class DriveFSMSystem extends SubsystemBase {
 	}
 
 	private void handleAlignToTagState() {
+		return;
+		/*
 		var tag = rpi.getAprilTagWithID(9);
 
 		if (tag != null && !tagPositionAligned) {
@@ -262,6 +255,7 @@ public class DriveFSMSystem extends SubsystemBase {
 			drive(ChassisSpeeds.fromFieldRelativeSpeeds(
 					xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
 		}
+					*/
 	}
 
 	public void followTrajectory(SwerveSample sample) {
@@ -286,8 +280,8 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @param speeds Chassis speeds
 	 */
 	private void drive(ChassisSpeeds speeds) {
-		var states = DriveConstants.DRIVE_KINEMATICS.toSwerveModuleStates(speeds);
-		SwerveDriveKinematics.desaturateWheelSpeeds(states, DriveConstants.MAX_SPEED_METERS_PER_SECOND);
+		var states = DriveConstants.kDriveKinematics.toSwerveModuleStates(speeds);
+		SwerveDriveKinematics.desaturateWheelSpeeds(states, DriveConstants.kMaxSpeedMetersPerSecond);
 		setModuleStates(states);
 	}
 
@@ -313,7 +307,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @return Current gyro heading in degrees
 	 */
 	private double getHeading() {
-		return gyro.getAngle() * (DriveConstants.IS_GYRO_REVERSED ? -1 : 1);
+		return gyro.getAngle() * (DriveConstants.kGyroReversed ? -1 : 1);
 	}
 
 	/**
