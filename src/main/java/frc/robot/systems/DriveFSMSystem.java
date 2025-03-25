@@ -5,6 +5,7 @@ import com.studica.frc.AHRS;
 
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
+import edu.wpi.first.math.controller.ProfiledPIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -13,8 +14,10 @@ import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.*;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
@@ -30,20 +33,19 @@ import jdk.jshell.spi.ExecutionControl;
 
 import java.util.ArrayList;
 
-import org.jcp.xml.dsig.internal.dom.Utils;
 import org.littletonrobotics.junction.Logger;
 
 public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
 	// FSM state definitions
-	public enum FSMState {
+	public enum DriveFSMState {
 		TELEOP_STATE,
 		ALIGN_TO_REEF_TAG_STATE,
 		ALIGN_TO_STATION_TAG_STATE
 	}
 
 	/* ======================== Private variables ======================== */
-	private FSMState currentState;
+	private DriveFSMState currentState;
 
 	// Hardware devices should be owned by one and only one system. They must
 	// be private to their owner system and may not be used elsewhere.
@@ -79,7 +81,56 @@ public class DriveFSMSystem extends SubsystemBase {
 	private Translation2d alignmentTranslation2d = null;
 	private double rotationCache2d = 0;
 	private Rotation2d rotationAlignmentPose = new Rotation2d();
+	private	Pose2d alignmentPose2d = null;
+	private boolean driveToPoseRunning = false;
 	private int tagID = -1;
+	private double alignmentYOff;
+	private double alignmentXOff;
+	private boolean driveToPoseFinished = false;
+	private boolean aligningToReef = false;
+	private Timer alignmentTimer = new Timer();
+
+	private final ProfiledPIDController driveController = new ProfiledPIDController(
+		AutoConstants.ALIGN_DRIVE_P, 0, 0, new TrapezoidProfile.Constraints(
+			AutoConstants.ALIGN_MAX_T_SPEED, AutoConstants.ALIGN_MAX_T_ACCEL
+		)
+	);
+
+	private final ProfiledPIDController thetaController = new ProfiledPIDController(
+		AutoConstants.ALIGN_THETA_P, 0, 0, new TrapezoidProfile.Constraints(
+			AutoConstants.ALIGN_MAX_R_SPEED, AutoConstants.ALIGN_MAX_R_ACCEL
+		)
+	);
+
+	private double driveErrorAbs;
+	private double thetaErrorAbs;
+	private Translation2d lastSetpointTranslation;
+
+	private int[] blueReefTagArray = new int[] {
+		AutoConstants.B_REEF_1_TAG_ID,
+		AutoConstants.B_REEF_2_TAG_ID,
+		AutoConstants.B_REEF_3_TAG_ID,
+		AutoConstants.B_REEF_4_TAG_ID,
+		AutoConstants.B_REEF_5_TAG_ID,
+		AutoConstants.B_REEF_6_TAG_ID
+	};
+	private int[] redReefTagArray = new int[] {
+		AutoConstants.R_REEF_1_TAG_ID,
+		AutoConstants.R_REEF_2_TAG_ID,
+		AutoConstants.R_REEF_3_TAG_ID,
+		AutoConstants.R_REEF_4_TAG_ID,
+		AutoConstants.R_REEF_5_TAG_ID,
+		AutoConstants.R_REEF_6_TAG_ID
+	};
+
+	private int[] blueStationTagArray = new int[] {
+		AutoConstants.BLUE_L_STATION_ID,
+		AutoConstants.BLUE_R_STATION_ID
+	};
+	private int[] redStationTagArray = new int[] {
+		AutoConstants.RED_L_STATION_ID,
+		AutoConstants.RED_R_STATION_ID
+	};
 
 	// Auto PIDS
 	private final PIDController xController = new PIDController(5, 0, 0);
@@ -106,7 +157,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * 
 	 * @return Current FSM state
 	 */
-	public FSMState getCurrentState() {
+	public DriveFSMState getCurrentState() {
 		return currentState;
 	}
 
@@ -119,7 +170,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * Ex. if the robot is enabled, disabled, then reenabled.
 	 */
 	public void reset() {
-		currentState = FSMState.TELEOP_STATE;
+		currentState = DriveFSMState.TELEOP_STATE;
 		zeroHeading();
 
 		// Call one tick of update to ensure outputs reflect start state
@@ -174,32 +225,44 @@ public class DriveFSMSystem extends SubsystemBase {
 	 *              the robot is in autonomous mode.
 	 * @return FSM state for the next iteration
 	 */
-	private FSMState nextState(TeleopInput input) {
-		return switch (currentState) {
-			case TELEOP_STATE -> {
-				if (input.getDriveControllerAlignToTagPressed()) {
-					yield FSMState.ALIGN_TO_TAG_STATE;
+	private DriveFSMState nextState(TeleopInput input) {
+		switch (currentState) {
+			case TELEOP_STATE:
+				if (input.getAlignReefButton()) {
+					return DriveFSMState.ALIGN_TO_REEF_TAG_STATE;
+				}  else if (input.getDriveTriangleButton()) {
+					return DriveFSMState.ALIGN_TO_STATION_TAG_STATE;
 				} else {
-					yield FSMState.TELEOP_STATE;
+					return DriveFSMState.TELEOP_STATE;
 				}
-			}
-			case ALIGN_TO_TAG_STATE -> {
-				if (!input.getDriveControllerAlignToTagPressed()) {
-					yield FSMState.TELEOP_STATE;
+			case ALIGN_TO_REEF_TAG_STATE:
+				if (input.getAlignReefButton()) {
+					return DriveFSMState.ALIGN_TO_REEF_TAG_STATE;
+				}  else if (input.getDriveTriangleButton()) {
+					return DriveFSMState.ALIGN_TO_STATION_TAG_STATE;
 				} else {
-					yield FSMState.ALIGN_TO_TAG_STATE;
+					return DriveFSMState.TELEOP_STATE;
 				}
-			}
-			default -> throw new IllegalStateException("Invalid state: " + currentState);
-		};
+			case ALIGN_TO_STATION_TAG_STATE:
+				if (input.getAlignReefButton()) {
+					return DriveFSMState.ALIGN_TO_REEF_TAG_STATE;
+				}  else if (input.getDriveTriangleButton()) {
+					return DriveFSMState.ALIGN_TO_STATION_TAG_STATE;
+				} else {
+					return DriveFSMState.TELEOP_STATE;
+				}
+
+			default:
+				throw new IllegalStateException("Invalid state: " + currentState.toString());
+		}
 	}
 
 	/* ------------------------ FSM state handlers ------------------------ */
 	private void handleTeleOpState(TeleopInput input) {
 		// Get joystick inputs
-		var xInput = input.getDriveControllerLeftY(); // Up and down on the left stick
-		var yInput = input.getDriveControllerLeftX(); // Left and right on the left stick
-		var rotInput = input.getDriveControllerRightX(); // Left and right on the right stick
+		var xInput = input.getDriveLeftJoystickY(); // Up and down on the left stick
+		var yInput = input.getDriveLeftJoystickX(); // Left and right on the left stick
+		var rotInput = input.getDriveRightJoystickX(); // Left and right on the right stick
 
 		Logger.recordOutput("DriveFSM/TeleOp/Inputs/X-Input", xInput);
 		Logger.recordOutput("DriveFSM/TeleOp/Inputs/Y-Input", yInput);
@@ -229,7 +292,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		drive(ChassisSpeeds.fromFieldRelativeSpeeds(
 				xSpeed, ySpeed, aSpeed, Rotation2d.fromDegrees(getHeading())));
 
-		if (input.getDriveControllerZeroHeadingPressed()) {
+		if (input.getSeedGyroButtonPressed()) {
 			zeroHeading();
 		}
 	}
@@ -290,7 +353,7 @@ public class DriveFSMSystem extends SubsystemBase {
 			aligningToReef = true;
 			handleTagAlignment(input, tagID, true);
 		} else {
-			drivetrain.setControl(brake);
+			drivetrainBrake();
 		}
 	}
 
@@ -342,7 +405,7 @@ public class DriveFSMSystem extends SubsystemBase {
 			aligningToReef = false;
 			handleTagAlignment(input, tagID, true);
 		} else {
-			drivetrain.setControl(brake);
+			drivetrainBrake();
 		}
 	}
 
@@ -355,13 +418,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	private void handleTagAlignment(TeleopInput input, int id, boolean allianceFlip) {
 		AprilTag tag = rpi.getAprilTagWithID(id);
-		Pose2d currPose;
-
-		if (Utils.isSimulation()) {
-			currPose = getMapleSimDrivetrain().getDriveSimulation().getSimulatedDriveTrainPose();
-		} else {
-			currPose = drivetrain.getState().Pose;
-		}
+		Pose2d currPose = getPose();
 
 		Transform3d robotToCamera;
 		if (aligningToReef) {
@@ -433,15 +490,148 @@ public class DriveFSMSystem extends SubsystemBase {
 		}
 
 		if (driveToPoseFinished || alignmentPose2d == null) {
-			drivetrain.setControl(
-				drive.withVelocityX(0)
-				.withVelocityY(0)
-				.withRotationalRate(0)
-			);
+			drivetrainBrake();
 			return;
 		}
 
 	}
+
+	/**
+	 * Drive to pose function.
+	 * @param target target pose to align to.
+	 * @param allianceFlip whether to incorporate an alliance multiplier in alignment directions.
+	 * @return whether or not driving is completed.
+	 */
+	public boolean driveToPose(Pose2d target, boolean allianceFlip) {
+		Pose2d currPose = getPose(); 
+
+		if (!driveToPoseRunning) {
+			driveToPoseRunning = true;
+			alignmentTimer.start();
+
+			ChassisSpeeds speeds = getChassisSpeeds();
+
+			driveController.reset(
+				currPose.getTranslation().getDistance(target.getTranslation()),
+				Math.min(
+					0.0,
+					-new Translation2d(
+						speeds.vxMetersPerSecond,
+						speeds.vyMetersPerSecond
+					).rotateBy(
+						target.getTranslation()
+						.minus(currPose.getTranslation())
+						.getAngle()
+						.unaryMinus()
+					).getX()
+				)
+			);
+
+			thetaController.reset(currPose.getRotation().getRadians(),
+				speeds.omegaRadiansPerSecond);
+			lastSetpointTranslation = currPose.getTranslation();
+		}
+
+		double currDistance = currPose.getTranslation().getDistance(target.getTranslation());
+		double ffScaler = MathUtil.clamp(
+			(currDistance - AutoConstants.FF_MIN_RADIUS)
+				/ (AutoConstants.FF_MAX_RADIUS - AutoConstants.FF_MIN_RADIUS),
+			0.0,
+			1.0
+		);
+
+		driveErrorAbs = currDistance;
+
+		driveController.reset(
+			lastSetpointTranslation.getDistance(target.getTranslation()),
+			driveController.getSetpoint().velocity
+		);
+
+		double driveVelocityScalar = driveController.getSetpoint().velocity * ffScaler
+			+ driveController.calculate(driveErrorAbs, 0.0);
+		if (currDistance < driveController.getPositionTolerance()) {
+			driveVelocityScalar = 0.0;
+		}
+
+		lastSetpointTranslation = new Pose2d(
+			target.getTranslation(),
+			currPose.getTranslation().minus(target.getTranslation()).getAngle()
+		).transformBy(
+			new Transform2d(
+				new Translation2d(driveController.getSetpoint().position, 0.0),
+				new Rotation2d()
+			)
+		).getTranslation();
+
+		// Calculate theta speed
+		double thetaVelocity = thetaController.getSetpoint().velocity * ffScaler
+			+ thetaController.calculate(
+				currPose.getRotation().getRadians(), target.getRotation().getRadians()
+		);
+		thetaErrorAbs = Math.abs(
+			currPose.getRotation().minus(target.getRotation()).getRadians()
+		);
+
+		if (thetaErrorAbs < thetaController.getPositionTolerance()) {
+			thetaVelocity = 0.0;
+		}
+
+		// Command speeds
+		var driveVelocity = new Pose2d(
+			new Translation2d(),
+			currPose.getTranslation().minus(target.getTranslation())
+			.getAngle()
+		).transformBy(
+			new Transform2d(
+				new Translation2d(driveVelocityScalar, 0.0),
+				new Rotation2d()
+			)
+		).getTranslation();
+
+		// TODO: Figure out how to convert this from driveFacingAngle to straight velocity control
+		drive(new ChassisSpeeds(driveVelocity.getX(), driveVelocity.getY(), thetaVelocity));
+
+		/*
+		drivetrain.setControl(
+			driveFacingAngle.
+				withVelocityX(
+					driveVelocity.getX()
+				)
+				.withVelocityY(
+					driveVelocity.getY()
+				)
+				.withTargetRateFeedforward(thetaVelocity)
+				.withTargetDirection(target.getRotation())
+				.withHeadingPID(DriveConstants.ALIGNMENT_HEADING_P, 0, 0)
+
+		);
+		*/
+
+		//drivetrain.setControl(brake);
+
+		rotationAlignmentPose = currPose.getRotation();
+
+		driveToPoseFinished = driveController.atGoal() && thetaController.atGoal();
+
+		if (driveToPoseFinished) {
+			alignmentTimer.stop();
+			alignmentTimer.reset();
+			drivetrainBrake();
+		}
+
+		Logger.recordOutput("DriveToPose/DriveError", driveErrorAbs);
+		Logger.recordOutput("DriveToPose/ThetaError", thetaErrorAbs);
+		Logger.recordOutput("DriveToPose/DriveVelocity", driveVelocityScalar);
+		Logger.recordOutput("DriveToPose/ThetaVelocity", thetaVelocity);
+		Logger.recordOutput("DriveToPose/DriveFinished", driveToPoseFinished);
+		Logger.recordOutput("DriveToPose/DriveSetpoint", driveController.getSetpoint().position);
+		Logger.recordOutput("DriveToPose/ThetaSetpoint", thetaController.getSetpoint().position);
+		Logger.recordOutput("DriveToPose/Time", alignmentTimer.get());
+		Logger.recordOutput("DriveToPose/TargetPose", target);
+
+		return driveToPoseFinished;
+	}
+
 
 	public void followTrajectory(SwerveSample sample) {
 		var pose = getPose();
@@ -515,6 +705,10 @@ public class DriveFSMSystem extends SubsystemBase {
 		gyro.zeroYaw();
 	}
 
+	private void drivetrainBrake() {
+		drive(new ChassisSpeeds(0, 0, 0));
+	}
+
 	private SwerveModulePosition[] getModulePositions() {
         return new SwerveModulePosition[] {
 				frontLeft.getPosition(),
@@ -522,6 +716,10 @@ public class DriveFSMSystem extends SubsystemBase {
 				rearLeft.getPosition(),
 				rearRight.getPosition()
 		};
+	}
+
+	private ChassisSpeeds getChassisSpeeds() {
+		return Constants.DriveConstants.kDriveKinematics.toChassisSpeeds(getModuleStates());
 	}
 
 	/**
