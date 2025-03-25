@@ -4,15 +4,24 @@
 
 package frc.robot;
 
+import static edu.wpi.first.units.Units.Inches;
+import static edu.wpi.first.units.Units.KilogramSquareMeters;
+import static edu.wpi.first.units.Units.Kilograms;
+import static edu.wpi.first.units.Units.Volts;
+
+import org.ironmaple.simulation.drivesims.COTS;
+import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
+import org.ironmaple.simulation.drivesims.configs.SwerveModuleSimulationConfig;
+
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
+import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.Filesystem;
 
 /**
  * The Constants class provides a convenient place for teams to hold robot-wide
@@ -29,8 +38,13 @@ import edu.wpi.first.wpilibj.Filesystem;
 public final class Constants {
 
   public static final class SimConstants {
-    public static final double MODULE_STEER_P = 70;
-    public static final double MODULE_STEER_D = 4.5;
+    public static final double kSimSteerP = 70;
+    public static final double kSimSteerI = 0;
+    public static final double kSimSteerD = 4.5;
+
+    public static final double kSimDriveP = 0.1;
+    public static final double kSimDriveI = 0;
+    public static final double kSimDriveD = 0;
 
     public static final double DRIVE_FRICTION_VOLTS = 0.1;
     public static final double STEER_FRICTION_VOLTS = 0.15;
@@ -68,8 +82,6 @@ public final class Constants {
     // Estimated values for now, need to be calculated later
     public static final double MASS_WITH_BUMPER_LBS = 115;
     public static final double MOI = 6.99597;
-    public static final double WIDTH_IN = 35.5;
-    public static final double LENGTH_IN = 35.5;
     public static final double WHEEL_COF = 1.2;
 
     public static final Translation2d FL_TRANSLATION = new Translation2d(
@@ -128,6 +140,22 @@ public final class Constants {
     public static final double ANGULAR_STD_MEGATAG_2_FACTOR = Double.POSITIVE_INFINITY; // No rotation data available
 
     // public static final double CAM_DISTANCE_READ = 2.5;
+    public static final DriveTrainSimulationConfig kSimConfig = DriveTrainSimulationConfig.Default()
+      .withCustomModuleTranslations(DriveConstants.kModuleTranslations)
+      .withRobotMass(Kilograms.of(50))
+      .withGyro(COTS.ofPigeon2())
+      .withSwerveModule(new SwerveModuleSimulationConfig(
+        DCMotor.getNEO(1),
+        DCMotor.getNeo550(1),
+        ModuleConstants.kDrivingMotorReduction,
+        ModuleConstants.kTurningMotorReduction, 
+        Volts.of(DRIVE_FRICTION_VOLTS),
+        Volts.of(STEER_FRICTION_VOLTS), 
+        Inches.of(1.5),
+        KilogramSquareMeters.of(0.02), 
+        WHEEL_COF
+      )
+    );
   }
 
   public static final class DriveConstants {
@@ -140,12 +168,16 @@ public final class Constants {
     public static final double kTrackWidth = Units.inchesToMeters(28.0);
     // Distance between centers of right and left wheels on robot
     public static final double kWheelBase = Units.inchesToMeters(28.0);
-    // Distance between front and back wheels on robot
-    public static final SwerveDriveKinematics kDriveKinematics = new SwerveDriveKinematics(
+    
+    public static final Translation2d[] kModuleTranslations = new Translation2d[] {
         new Translation2d(kWheelBase / 2, kTrackWidth / 2),
         new Translation2d(kWheelBase / 2, -kTrackWidth / 2),
         new Translation2d(-kWheelBase / 2, kTrackWidth / 2),
-        new Translation2d(-kWheelBase / 2, -kTrackWidth / 2));
+        new Translation2d(-kWheelBase / 2, -kTrackWidth / 2)
+    };
+
+    // Distance between front and back wheels on robot
+    public static final SwerveDriveKinematics kDriveKinematics = new SwerveDriveKinematics(kModuleTranslations);
 
     // Angular offsets of the modules relative to the chassis in radians
     public static final double kFrontLeftChassisAngularOffset = Math.PI;
@@ -197,6 +229,8 @@ public final class Constants {
     public static final double kDrivingMotorReduction = (45.0 * 22) / (kDrivingMotorPinionTeeth * 15);
     public static final double kDriveWheelFreeSpeedRps = (kDrivingMotorFreeSpeedRps * kWheelCircumferenceMeters)
         / kDrivingMotorReduction;
+
+    public static final double kTurningMotorReduction = 9424.0 / 203.0;
   }
 
   public static final class OIConstants {
@@ -345,9 +379,6 @@ public final class Constants {
 
     public static final String REEF_CAM_NAME = "Reef_Camera";
     public static final String SOURCE_CAM_NAME = "Source_Camera";
-
-    public static final String APRIL_TAG_FIELD_LAYOUT_JSON = Filesystem.getDeployDirectory()
-        + "/apriltag/welded/apriltag.json";
 
     public static final int LOCALIZATION_TAG_NUM = 1;
     public static final double LOCALIZATION_TRANSLATIONAL_THRESHOLD = 0.4;

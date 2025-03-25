@@ -26,13 +26,16 @@ import frc.robot.vision.AprilTag;
 import frc.robot.vision.rpi.RaspberryPi;
 import frc.robot.vision.rpi.RaspberryPiPhoton;
 import frc.robot.MAXSwerveModule;
+import frc.robot.Robot;
 import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.SimConstants;
-import jdk.jshell.spi.ExecutionControl;
 
+import java.nio.file.attribute.GroupPrincipal;
 import java.util.ArrayList;
 
+import org.ironmaple.simulation.drivesims.COTS;
+import org.ironmaple.simulation.drivesims.GyroSimulation;
 import org.littletonrobotics.junction.Logger;
 
 public class DriveFSMSystem extends SubsystemBase {
@@ -70,6 +73,8 @@ public class DriveFSMSystem extends SubsystemBase {
 		DriveConstants.kBackRightChassisAngularOffset);
 
 	private final AHRS gyro = new AHRS(AHRS.NavXComType.kMXP_SPI);
+	private final GyroSimulation gyroSim = new GyroSimulation(1, 0.02);
+
 	private final RaspberryPi rpi = new RaspberryPiPhoton(); 
 
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
@@ -690,7 +695,9 @@ public class DriveFSMSystem extends SubsystemBase {
 	 * @return Current gyro heading in degrees
 	 */
 	private double getHeading() {
-		return gyro.getAngle() * (DriveConstants.kGyroReversed ? -1 : 1);
+		var readingInDegrees = Robot.isSimulation() ? gyroSim.getGyroReading().getDegrees() : gyro.getAngle();
+
+		return readingInDegrees * (DriveConstants.kGyroReversed ? -1 : 1);
 	}
 
 	/**
