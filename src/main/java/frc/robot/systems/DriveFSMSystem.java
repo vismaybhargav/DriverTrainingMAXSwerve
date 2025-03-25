@@ -632,6 +632,14 @@ public class DriveFSMSystem extends SubsystemBase {
 		return driveToPoseFinished;
 	}
 
+	/**
+	* Gets robot alignment status (for LEDs).
+	* @return Whether the robot is aligned to the target apriltag.
+	*/
+	public boolean isAlignedToTag() {
+		return driveToPoseFinished;
+	}
+
 
 	public void followTrajectory(SwerveSample sample) {
 		var pose = getPose();
