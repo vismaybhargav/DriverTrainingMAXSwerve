@@ -118,8 +118,9 @@ public class Robot extends LoggedRobot {
 	// Do not use robotPeriodic. Use mode specific periodic methods instead.
 	@Override
 	public void robotPeriodic() {
-		if(driveSystem != null) {
-			Logger.recordOutput("DriveFSM/Current State", driveSystem.getCurrentState());
-		}
+		Logger.recordOutput("DriveFSM/Current State", driveSystem.getCurrentState());
+    Logger.recordOutput("DriveFSM/Swerve States", driveSystem.getModuleStates());
+    Logger.recordOutput("DriveFSM/Chassis Speeds", driveSystem.getChassisSpeeds());
+    Logger.recordOutput("DriveFSM/Current Pose", driveSystem.getPose());
 	}
 }

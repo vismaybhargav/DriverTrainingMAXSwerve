@@ -29,7 +29,6 @@ import frc.robot.MAXSwerveModule;
 import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.SimConstants;
-import jdk.jshell.spi.ExecutionControl;
 
 import java.util.ArrayList;
 
@@ -189,6 +188,8 @@ public class DriveFSMSystem extends SubsystemBase {
 			return;
 		}
 
+		odometry.update(Rotation2d.fromDegrees(getHeading()), getModulePositions());
+
 		switch (currentState) {
 			case TELEOP_STATE:
 				handleTeleOpState(input);
@@ -259,6 +260,14 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	/* ------------------------ FSM state handlers ------------------------ */
 	private void handleTeleOpState(TeleopInput input) {
+
+		/* CV RESET */
+		tagID = -1;
+		alignmentXOff = 0;
+		alignmentYOff = 0;
+		driveToPoseFinished = false;
+		driveToPoseRunning = false;
+
 		// Get joystick inputs
 		var xInput = input.getDriveLeftJoystickY(); // Up and down on the left stick
 		var yInput = input.getDriveLeftJoystickX(); // Left and right on the left stick
@@ -294,6 +303,10 @@ public class DriveFSMSystem extends SubsystemBase {
 
 		if (input.getSeedGyroButtonPressed()) {
 			zeroHeading();
+		}
+
+		if (input.getDriveShareButtonPressed()) {
+			resetOdometry(new Pose2d(0, 0, new Rotation2d()));
 		}
 	}
 
@@ -640,7 +653,6 @@ public class DriveFSMSystem extends SubsystemBase {
 		return driveToPoseFinished;
 	}
 
-
 	public void followTrajectory(SwerveSample sample) {
 		var pose = getPose();
 
@@ -675,7 +687,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		rearRight.setDesiredState(states[3]);
 	}
 
-	private SwerveModuleState[] getModuleStates() {
+	public SwerveModuleState[] getModuleStates() {
 		return new SwerveModuleState[] {
 				frontLeft.getState(),
 				frontRight.getState(),
@@ -726,7 +738,7 @@ public class DriveFSMSystem extends SubsystemBase {
 		};
 	}
 
-	private ChassisSpeeds getChassisSpeeds() {
+	public ChassisSpeeds getChassisSpeeds() {
 		return Constants.DriveConstants.kDriveKinematics.toChassisSpeeds(getModuleStates());
 	}
 
