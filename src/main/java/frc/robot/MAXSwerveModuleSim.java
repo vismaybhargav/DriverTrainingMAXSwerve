@@ -1,7 +1,9 @@
 package frc.robot;
 
 import static edu.wpi.first.units.Units.Amps;
+import static edu.wpi.first.units.Units.RadiansPerSecond;
 import static edu.wpi.first.units.Units.Rotations;
+import static edu.wpi.first.units.Units.Volts;
 
 import org.ironmaple.simulation.drivesims.SwerveModuleSimulation;
 import org.ironmaple.simulation.motorsims.SimulatedMotorController;
@@ -13,10 +15,13 @@ import edu.wpi.first.math.kinematics.SwerveModuleState;
 import frc.robot.Constants.DriveConstants;
 import frc.robot.Constants.SimConstants;
 
-public class MAXSwerveModuleSim extends MAXSwerveModule{
+public class MAXSwerveModuleSim extends MAXSwerveModule {
     private final SwerveModuleSimulation moduleSimulation;
     private final SimulatedMotorController.GenericMotorController drivingMotor;
     private final SimulatedMotorController.GenericMotorController turningMotor;
+
+    private double driveAppliedVolts;
+    private double turnAppliedVolts;
 
     private final PIDController driveController = new PIDController(
         SimConstants.kSimDriveP,
@@ -44,6 +49,14 @@ public class MAXSwerveModuleSim extends MAXSwerveModule{
         this.moduleSimulation = moduleSimulation;
         drivingMotor = moduleSimulation.useGenericMotorControllerForDrive().withCurrentLimit(Amps.of(DriveConstants.kDrivingCurrentLimitAmps));
         turningMotor = moduleSimulation.useGenericControllerForSteer().withCurrentLimit(Amps.of(DriveConstants.kTurningCurrentLimitAmps));
+    }
+
+    public void updateModule() {
+        driveAppliedVolts = driveController.calculate(moduleSimulation.getDriveWheelFinalSpeed().in(RadiansPerSecond));
+        turnAppliedVolts = turnController.calculate(moduleSimulation.getSteerAbsoluteFacing().getRadians());
+
+        drivingMotor.requestVoltage(Volts.of(driveAppliedVolts));
+        turningMotor.requestVoltage(Volts.of(turnAppliedVolts));
     }
 
     @Override

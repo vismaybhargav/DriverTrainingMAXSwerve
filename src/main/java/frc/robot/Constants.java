@@ -22,6 +22,7 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.Filesystem;
 
 /**
  * The Constants class provides a convenient place for teams to hold robot-wide
@@ -371,6 +372,9 @@ public final class Constants {
     public static final double TAG_TARGET_DISTANCE = 0.2;
 
     public static final double N_180 = 180;
+
+    public static final String APRIL_TAG_FIELD_LAYOUT_JSON =
+		Filesystem.getDeployDirectory() + "/apriltag/welded/apriltag.json";
 
     public static final int AT_ARR_INC = 10;
     public static final int AT_ARR_CAMERA_OFFSET = 1;
