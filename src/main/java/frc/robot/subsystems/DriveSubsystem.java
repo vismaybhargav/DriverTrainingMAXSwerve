@@ -204,8 +204,8 @@ public class DriveSubsystem extends SubsystemBase {
 
   public void updateSwerveModuleStates() {
     swerveModuleStates[0] = m_frontLeft.getState();
-    swerveModuleStates[1] = m_frontLeft.getState();
-    swerveModuleStates[2] = m_frontLeft.getState();
-    swerveModuleStates[3] = m_frontLeft.getState();
+    swerveModuleStates[1] = m_frontRight.getState();
+    swerveModuleStates[2] = m_rearLeft.getState();
+    swerveModuleStates[3] = m_rearRight.getState();
   }
 }
