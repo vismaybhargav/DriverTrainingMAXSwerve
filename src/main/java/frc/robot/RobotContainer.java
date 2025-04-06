@@ -7,18 +7,21 @@ package frc.robot;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.wpilibj.PS4Controller;
 import edu.wpi.first.wpilibj.XboxController;
 import frc.robot.Constants.OIConstants;
 import frc.robot.commands.DriveCommands;
 import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.drive.gyro.GyroIO;
 import frc.robot.subsystems.drive.gyro.GyroIONavX;
-import frc.robot.subsystems.drive.gyro.GyroIOSim;
+import frc.robot.subsystems.drive.gyro.GyroIOMapleSim;
 import frc.robot.subsystems.drive.module.ModuleIO;
+import frc.robot.subsystems.drive.module.ModuleIOMapleSim;
 import frc.robot.subsystems.drive.module.ModuleIOSim;
 import frc.robot.subsystems.drive.module.ModuleIOSpark;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandPS4Controller;
+import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 
 import frc.robot.subsystems.vision.Vision;
@@ -38,120 +41,147 @@ import static frc.robot.Constants.VisionConstants.*;
  * (including subsystems, commands, and button mappings) should be declared here.
  */
 public class RobotContainer {
-  // The robot's subsystems
-  private final Drive robotDrive;
-  private final Vision vision;
+        // The robot's subsystems
+        private final Drive robotDrive;
+        private final Vision vision;
 
-  // The simulation
-  private SwerveDriveSimulation simulation = null;
+        // The simulation
+        private SwerveDriveSimulation simulation = null;
 
-  // The driver's controller
-  CommandPS4Controller driverController = new CommandPS4Controller(OIConstants.driverControllerPort);
+        private boolean useMapleSim = false;
 
-  /**
-   * The container for the robot. Contains subsystems, OI devices, and commands.
-   */
-  public RobotContainer() {
-    if(Robot.isReal()) {
-      robotDrive = new Drive(
-              new GyroIONavX(),
-              new ModuleIOSpark(0),
-              new ModuleIOSpark(1),
-              new ModuleIOSpark(2),
-              new ModuleIOSpark(3),
-              (pose) -> {});
+        // The driver's controller
+        CommandPS4Controller driverController = new CommandPS4Controller(OIConstants.driverControllerPort);
+        PS4Controller driveControllerHID = driverController.getHID();
 
-      vision = new Vision(
-              robotDrive::addVisionMeasurement,
-              new VisionIOPhotonVision(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM),
-              new VisionIOPhotonVision(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM));
+        /**
+         * The container for the robot. Contains subsystems, OI devices, and commands.
+         */
+        public RobotContainer() {
+                if (Robot.isReal()) {
+                        robotDrive = new Drive(
+                                        new GyroIONavX(),
+                                        new ModuleIOSpark(0),
+                                        new ModuleIOSpark(1),
+                                        new ModuleIOSpark(2),
+                                        new ModuleIOSpark(3),
+                                        (pose) -> {
+                                        });
 
-    } else if(Robot.isSimulation()) {
-      simulation = new SwerveDriveSimulation(
-              Constants.SimConstants.mapleSimConfig,
-              new Pose2d(3, 3, new Rotation2d())
-      );
+                        vision = new Vision(
+                                        robotDrive::addVisionMeasurement,
+                                        new VisionIOPhotonVision(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM),
+                                        new VisionIOPhotonVision(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM));
 
-      SimulatedArena.getInstance().addDriveTrainSimulation(simulation);
+                } else if (Robot.isSimulation()) {
+                        if (useMapleSim) {
+                                simulation = new SwerveDriveSimulation(
+                                                Constants.SimConstants.mapleSimConfig,
+                                                new Pose2d(3, 3, new Rotation2d()));
 
-      var modules = simulation.getModules();
+                                SimulatedArena.getInstance().addDriveTrainSimulation(simulation);
 
-      robotDrive = new Drive(
-              new GyroIOSim(simulation.getGyroSimulation()),
-              new ModuleIOSim(modules[0]),
-              new ModuleIOSim(modules[1]),
-              new ModuleIOSim(modules[2]),
-              new ModuleIOSim(modules[3]),
-              simulation::setSimulationWorldPose
-      );
+                                var modules = simulation.getModules();
 
-        vision = new Vision(
-                robotDrive::addVisionMeasurement,
-                new VisionIOPhotonVisionSim(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM, robotDrive::getPose),
-                new VisionIOPhotonVisionSim(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM, robotDrive::getPose));
-    } else {
-      robotDrive = new Drive(
-              new GyroIO()   {},
-              new ModuleIO() {},
-              new ModuleIO() {},
-              new ModuleIO() {},
-              new ModuleIO() {},
-              (pose) -> {});
+                                robotDrive = new Drive(
+                                                new GyroIOMapleSim(simulation.getGyroSimulation()),
+                                                new ModuleIOMapleSim(modules[0]),
+                                                new ModuleIOMapleSim(modules[1]),
+                                                new ModuleIOMapleSim(modules[2]),
+                                                new ModuleIOMapleSim(modules[3]),
+                                                simulation::setSimulationWorldPose);
 
-        vision = new Vision(robotDrive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
-    }
+                        } else {
+                                robotDrive = new Drive(
+                                        new GyroIO() {}, 
+                                        new ModuleIOSim(), 
+                                        new ModuleIOSim(), 
+                                        new ModuleIOSim(), 
+                                        new ModuleIOSim(), 
+                                        (pose) -> {});
+                        }
 
-    // TODO: Setup auto routines
+                        vision = new Vision(
+                                        robotDrive::addVisionMeasurement,
+                                        new VisionIOPhotonVisionSim(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM,
+                                                        robotDrive::getPose),
+                                        new VisionIOPhotonVisionSim(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM,
+                                                        robotDrive::getPose));
+                } else {
+                        robotDrive = new Drive(
+                                        new GyroIO() {
+                                        },
+                                        new ModuleIO() {
+                                        },
+                                        new ModuleIO() {
+                                        },
+                                        new ModuleIO() {
+                                        },
+                                        new ModuleIO() {
+                                        },
+                                        (pose) -> {
+                                        });
 
-    // Configure the button bindings
-    configureButtonBindings();
+                        vision = new Vision(robotDrive::addVisionMeasurement, new VisionIO() {
+                        }, new VisionIO() {
+                        });
+                }
 
-  }
+                // TODO: Setup auto routines
 
-  /**
-   * Use this method to define your button->command mappings. Buttons can be
-   * created by
-   * instantiating a {@link edu.wpi.first.wpilibj.GenericHID} or one of its
-   * subclasses ({@link
-   * edu.wpi.first.wpilibj.Joystick} or {@link XboxController}), and then calling
-   * passing it to a
-   * {@link JoystickButton}.
-   */
-  private void configureButtonBindings() {
-    System.out.println(robotDrive);
-    // Configure default commands
-    robotDrive.setDefaultCommand(
-            // The left stick controls translation of the robot.
-            // Turning is controlled by the X axis of the right stick.
-            DriveCommands.joystickDrive(
-                    robotDrive,
-                    () -> -MathUtil.applyDeadband(driverController.getLeftY(), OIConstants.driveDeadband),
-                    () -> -MathUtil.applyDeadband(driverController.getLeftX(), OIConstants.driveDeadband),
-                    () -> -MathUtil.applyDeadband(driverController.getRightX(),OIConstants.driveDeadband)
-            )
-    );
+                // Configure the button bindings
+                configureButtonBindings();
 
-    final Runnable resetGyro = Robot.isSimulation()
-            ? () -> robotDrive.resetOdometry(
-                    simulation.getSimulatedDriveTrainPose())
-            : () -> robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d())
-    );
-    driverController.share().onTrue(Commands.runOnce(resetGyro, robotDrive).ignoringDisable(true));
-  }
+        }
 
-  public void resetSimulationField() {
-      if(!Robot.isSimulation() || simulation == null) return;
+        /**
+         * Use this method to define your button->command mappings. Buttons can be
+         * created by
+         * instantiating a {@link edu.wpi.first.wpilibj.GenericHID} or one of its
+         * subclasses ({@link
+         * edu.wpi.first.wpilibj.Joystick} or {@link XboxController}), and then calling
+         * passing it to a
+         * {@link JoystickButton}.
+         */
+        private void configureButtonBindings() {
+                // Configure default commands
+                robotDrive.setDefaultCommand(
+                                // The left stick controls translation of the robot.
+                                // Turning is controlled by the X axis of the right stick.
+                                DriveCommands.joystickDrive(
+                                                robotDrive,
+                                                () -> -MathUtil.applyDeadband(driveControllerHID.getLeftY(),
+                                                                OIConstants.driveDeadband),
+                                                () -> -MathUtil.applyDeadband(driveControllerHID.getLeftX(),
+                                                                OIConstants.driveDeadband),
+                                                () -> -MathUtil.applyDeadband(driveControllerHID.getRightX(),
+                                                                OIConstants.driveDeadband)));
 
-      robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
-      SimulatedArena.getInstance().resetFieldForAuto();
-  }
+                final Runnable resetGyro = Robot.isSimulation()
+                                ? () -> robotDrive.resetOdometry(
+                                                simulation.getSimulatedDriveTrainPose())
+                                : () -> robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
 
-  public void updateSimulation() {
-    if(!Robot.isSimulation() || simulation == null ) return;
+                driverController.share().onTrue(Commands.runOnce(resetGyro, robotDrive).ignoringDisable(true));
+        }
 
-    SimulatedArena.getInstance().simulationPeriodic();
-    Logger.recordOutput("Field Simulation/Robot Pose", simulation.getSimulatedDriveTrainPose());
-    Logger.recordOutput("Field Simulation/Coral", SimulatedArena.getInstance().getGamePiecesArrayByType("Coral"));
-    Logger.recordOutput("Field Simulation/Algae", SimulatedArena.getInstance().getGamePiecesArrayByType("Algae"));
-  }
+        public void resetSimulationField() {
+                if (!Robot.isSimulation() || simulation == null)
+                        return;
+
+                robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
+                SimulatedArena.getInstance().resetFieldForAuto();
+        }
+
+        public void updateSimulation() {
+                if (!Robot.isSimulation() || simulation == null)
+                        return;
+
+                SimulatedArena.getInstance().simulationPeriodic();
+                Logger.recordOutput("Field Simulation/Robot Pose", simulation.getSimulatedDriveTrainPose());
+                Logger.recordOutput("Field Simulation/Coral",
+                                SimulatedArena.getInstance().getGamePiecesArrayByType("Coral"));
+                Logger.recordOutput("Field Simulation/Algae",
+                                SimulatedArena.getInstance().getGamePiecesArrayByType("Algae"));
+        }
 }

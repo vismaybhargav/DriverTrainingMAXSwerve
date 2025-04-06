@@ -72,7 +72,7 @@ public class Drive extends SubsystemBase {
             driveKinematics, rawGyroRotation, lastModulePositions
     );
 
-    public boolean useOdometry = true;
+    public boolean useOdometry = false;
 
     private final Consumer<Pose2d> resetSimulationPoseCallBack;
 
@@ -147,15 +147,13 @@ public class Drive extends SubsystemBase {
             }
 
             // Apply update
-            if(useOdometry) {
-                poseEstimator.updateWithTime(
-                        sampleTimestamps[i],
-                        rawGyroRotation,
-                        modulePositions
-                );
-            } else {
-                odometry.update(rawGyroRotation, modulePositions);
-            }
+            poseEstimator.updateWithTime(
+                    sampleTimestamps[i],
+                    rawGyroRotation,
+                    modulePositions
+            );
+
+            odometry.update(rawGyroRotation, modulePositions);
         }
 
         // Update gyro alert
@@ -269,11 +267,8 @@ public class Drive extends SubsystemBase {
     public void resetOdometry(Pose2d pose) {
         resetSimulationPoseCallBack.accept(pose);
 
-        if(useOdometry) {
-            odometry.resetPosition(getRotation(), getModulePositions(), pose);
-        } else {
-            poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
-        }
+        odometry.resetPosition(getRotation(), getModulePositions(), pose);
+        poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
     }
 
     /**
