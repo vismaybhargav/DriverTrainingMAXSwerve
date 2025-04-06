@@ -13,16 +13,21 @@
 
 package frc.robot.subsystems.drive;
 
+import static edu.wpi.first.units.Units.Seconds;
 import static frc.robot.Constants.DriveConstants.*;
 
 import edu.wpi.first.hal.FRCNetComm.tInstances;
 import edu.wpi.first.hal.FRCNetComm.tResourceType;
 import edu.wpi.first.hal.HAL;
+import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Twist2d;
 import edu.wpi.first.math.kinematics.*;
+import edu.wpi.first.math.numbers.N1;
+import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -38,7 +43,7 @@ import java.util.function.Consumer;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
-public class DriveSubsystem extends SubsystemBase {
+public class Drive extends SubsystemBase {
     static final Lock odometryLock = new ReentrantLock();
     private final GyroIO gyroIO;
     private final GyroIOInputsAutoLogged gyroInputs = new GyroIOInputsAutoLogged();
@@ -71,7 +76,7 @@ public class DriveSubsystem extends SubsystemBase {
 
     private final Consumer<Pose2d> resetSimulationPoseCallBack;
 
-    public DriveSubsystem(
+    public Drive(
             GyroIO gyroIO,
             ModuleIO flModuleIO,
             ModuleIO frModuleIO,
@@ -118,6 +123,7 @@ public class DriveSubsystem extends SubsystemBase {
         // Update odometry
         double[] sampleTimestamps = modules[0].getOdometryTimestamps(); // All signals are sampled together
         int sampleCount = sampleTimestamps.length;
+
         for (int i = 0; i < sampleCount; i++) {
             // Read wheel positions and deltas from each module
             SwerveModulePosition[] modulePositions = new SwerveModulePosition[4];
@@ -270,6 +276,23 @@ public class DriveSubsystem extends SubsystemBase {
         }
     }
 
+    /**
+     * Adds a new timestamped vision measurement
+     * @param visionPoseMeters The pose of the robot in the camera's coordinate frame
+     * @param timestamp The timestamp of the measurement
+     * @param visionStdDevs The standard deviations of the measurement in the x, y, and theta directions
+     */
+    public void addVisionMeasurement(
+            Pose2d visionPoseMeters,
+            Time timestamp,
+            Matrix<N3, N1> visionStdDevs
+    ) {
+        poseEstimator.addVisionMeasurement(
+                visionPoseMeters,
+                timestamp.in(Seconds),
+                visionStdDevs
+        );
+    }
 
     /** Returns the maximum linear speed in meters per sec. */
     public double getMaxLinearSpeedMetersPerSec() {

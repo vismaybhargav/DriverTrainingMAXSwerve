@@ -4,7 +4,10 @@
 
 package frc.robot;
 
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.apriltag.AprilTagFields;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.system.plant.DCMotor;
@@ -173,6 +176,27 @@ public final class Constants {
     public static final double turnEncoderVelocityFactor = (2 * Math.PI) / 60.0; // RPM -> Rad/Sec
 
     public static final double wheelCOF = 1.2;
+  }
+
+  public static final class VisionConstants {
+    public static AprilTagFieldLayout TAG_LAYOUT = AprilTagFieldLayout.loadField(AprilTagFields.k2025ReefscapeWelded);
+
+    public static String REEF_CAMERA_NAME = "Reef Camera";
+    public static String STATION_CAMERA_NAME = "Station Camera";
+
+    public static Transform3d ROBOT_TO_REEF_CAM = new Transform3d();
+    public static Transform3d ROBOT_TO_STATION_CAM = new Transform3d();
+
+    public static double MAX_AMBIGUITY = 0.5;
+    public static double MAX_Z_ERROR = 5.0; // meters
+
+    public static double LINEAR_STD_DEV_BASELINE = 0.02;
+    public static double ANGULAR_STD_DEV_BASELINE = 0.06;
+
+    public static double[] CAMERA_STD_DEV_FACTORS = new double[]{
+            1.0, // Reef Camera
+            1.0 // Station Camera
+    };
   }
 
   public static final class OIConstants {

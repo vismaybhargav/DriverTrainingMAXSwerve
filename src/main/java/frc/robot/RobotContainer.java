@@ -10,10 +10,9 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.XboxController;
 import frc.robot.Constants.OIConstants;
 import frc.robot.commands.DriveCommands;
-import frc.robot.subsystems.drive.DriveSubsystem;
+import frc.robot.subsystems.drive.Drive;
 import frc.robot.subsystems.drive.gyro.GyroIO;
 import frc.robot.subsystems.drive.gyro.GyroIONavX;
-import frc.robot.subsystems.drive.gyro.GyroIOPigeon2;
 import frc.robot.subsystems.drive.gyro.GyroIOSim;
 import frc.robot.subsystems.drive.module.ModuleIO;
 import frc.robot.subsystems.drive.module.ModuleIOSim;
@@ -22,9 +21,15 @@ import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandPS4Controller;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 
+import frc.robot.subsystems.vision.Vision;
+import frc.robot.subsystems.vision.VisionIO;
+import frc.robot.subsystems.vision.VisionIOPhotonVision;
+import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
 import org.ironmaple.simulation.SimulatedArena;
 import org.ironmaple.simulation.drivesims.SwerveDriveSimulation;
 import org.littletonrobotics.junction.Logger;
+
+import static frc.robot.Constants.VisionConstants.*;
 
 /*
  * This class is where the bulk of the robot should be declared.  Since Command-based is a
@@ -34,7 +39,8 @@ import org.littletonrobotics.junction.Logger;
  */
 public class RobotContainer {
   // The robot's subsystems
-  private final DriveSubsystem robotDrive;
+  private final Drive robotDrive;
+  private final Vision vision;
 
   // The simulation
   private SwerveDriveSimulation simulation = null;
@@ -47,23 +53,30 @@ public class RobotContainer {
    */
   public RobotContainer() {
     if(Robot.isReal()) {
-      robotDrive = new DriveSubsystem(
+      robotDrive = new Drive(
               new GyroIONavX(),
               new ModuleIOSpark(0),
               new ModuleIOSpark(1),
               new ModuleIOSpark(2),
               new ModuleIOSpark(3),
               (pose) -> {});
+
+      vision = new Vision(
+              robotDrive::addVisionMeasurement,
+              new VisionIOPhotonVision(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM),
+              new VisionIOPhotonVision(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM));
+
     } else if(Robot.isSimulation()) {
       simulation = new SwerveDriveSimulation(
               Constants.SimConstants.mapleSimConfig,
               new Pose2d(3, 3, new Rotation2d())
       );
+
       SimulatedArena.getInstance().addDriveTrainSimulation(simulation);
 
       var modules = simulation.getModules();
 
-      robotDrive = new DriveSubsystem(
+      robotDrive = new Drive(
               new GyroIOSim(simulation.getGyroSimulation()),
               new ModuleIOSim(modules[0]),
               new ModuleIOSim(modules[1]),
@@ -71,14 +84,21 @@ public class RobotContainer {
               new ModuleIOSim(modules[3]),
               simulation::setSimulationWorldPose
       );
+
+        vision = new Vision(
+                robotDrive::addVisionMeasurement,
+                new VisionIOPhotonVisionSim(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM, robotDrive::getPose),
+                new VisionIOPhotonVisionSim(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM, robotDrive::getPose));
     } else {
-      robotDrive = new DriveSubsystem(
+      robotDrive = new Drive(
               new GyroIO()   {},
               new ModuleIO() {},
               new ModuleIO() {},
               new ModuleIO() {},
               new ModuleIO() {},
               (pose) -> {});
+
+        vision = new Vision(robotDrive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
     }
 
     // TODO: Setup auto routines
