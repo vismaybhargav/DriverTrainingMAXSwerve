@@ -35,6 +35,7 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Robot;
 import frc.robot.subsystems.drive.module.*;
 import frc.robot.subsystems.drive.module.Module;
+import frc.robot.util.LocalADStarAK;
 import frc.robot.subsystems.drive.gyro.*;
 
 import java.util.concurrent.locks.Lock;
@@ -42,6 +43,12 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
+
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.config.PIDConstants;
+import com.pathplanner.lib.config.RobotConfig;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
+import com.pathplanner.lib.pathfinding.Pathfinding;
 
 public class Drive extends SubsystemBase {
     static final Lock odometryLock = new ReentrantLock();
@@ -187,6 +194,40 @@ public class Drive extends SubsystemBase {
         for (int i = 0; i < 4; i++) {
             modules[i].runCharacterization(output);
         }
+    }
+
+    /**
+     * Setup PathPlanner and necessary configs
+     */
+    public void setupPathPlanner() {
+        RobotConfig config = null;
+        try {
+            config = RobotConfig.fromGUISettings();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        AutoBuilder.configure(
+            this::getPose,
+            this::resetOdometry,
+            this::getChassisSpeeds,
+            (speeds, feedforwards) -> runVelocity(speeds),
+            new PPHolonomicDriveController(
+                new PIDConstants(0, 0, 0),
+                new PIDConstants(0, 0, 0)),
+            config,
+            () -> {
+                var alliance = DriverStation.getAlliance();
+                if (alliance.isPresent()) {
+                    return alliance.get() == DriverStation.Alliance.Red;
+                }
+                return false;
+            },
+            this
+        );
+
+        Pathfinding.setPathfinder(new LocalADStarAK());
+
     }
 
     /** Stops the drive. */
