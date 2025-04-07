@@ -29,6 +29,8 @@ import frc.robot.subsystems.vision.VisionIOPhotonPoseEstimator;
 import frc.robot.subsystems.vision.VisionIOPhotonPoseEstimatorSim;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
+import frc.robot.util.Features;
+
 import org.ironmaple.simulation.SimulatedArena;
 import org.ironmaple.simulation.drivesims.SwerveDriveSimulation;
 import org.littletonrobotics.junction.Logger;
@@ -49,9 +51,6 @@ public class RobotContainer {
 	// The simulation
 	private SwerveDriveSimulation simulation = null;
 
-	private boolean useMapleSim = false;
-	private boolean usePhotonPoseEstimator = false;
-
 	// The driver's controller
 	CommandPS4Controller driverController = new CommandPS4Controller(OIConstants.driverControllerPort);
 	PS4Controller driveControllerHID = driverController.getHID();
@@ -70,7 +69,7 @@ public class RobotContainer {
 					(pose) -> {
 					});
 
-			if (usePhotonPoseEstimator) {
+			if (Features.PHOTON_VISION_POSE_ESTIMATOR_ENABLED) {
 				vision = new Vision(
 						robotDrive::addVisionMeasurement,
 						new VisionIOPhotonPoseEstimator(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM),
@@ -83,7 +82,7 @@ public class RobotContainer {
 			}
 
 		} else if (Robot.isSimulation()) {
-			if (useMapleSim) {
+			if (Features.MAPLE_SIM_ENABLED) {
 				simulation = new SwerveDriveSimulation(
 						Constants.SimConstants.mapleSimConfig,
 						new Pose2d(3, 3, new Rotation2d()));
@@ -110,7 +109,7 @@ public class RobotContainer {
 						(pose) -> {});
 			}
 
-			if (usePhotonPoseEstimator) {
+			if (Features.PHOTON_VISION_POSE_ESTIMATOR_ENABLED) {
 				vision = new Vision(
 					robotDrive::addVisionMeasurement, 
 					new VisionIOPhotonPoseEstimatorSim(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM,
