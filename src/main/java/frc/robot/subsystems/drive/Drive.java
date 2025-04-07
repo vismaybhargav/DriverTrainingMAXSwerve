@@ -72,8 +72,6 @@ public class Drive extends SubsystemBase {
             driveKinematics, rawGyroRotation, lastModulePositions
     );
 
-    public boolean useOdometry = false;
-
     private final Consumer<Pose2d> resetSimulationPoseCallBack;
 
     public Drive(
@@ -255,7 +253,7 @@ public class Drive extends SubsystemBase {
     /** Returns the current odometry pose. */
     @AutoLogOutput(key = "Odometry/Robot")
     public Pose2d getPose() {
-        return useOdometry ? odometry.getPoseMeters() : poseEstimator.getEstimatedPosition();
+        return poseEstimator.getEstimatedPosition();
     }
 
     /** Returns the current odometry rotation. */
