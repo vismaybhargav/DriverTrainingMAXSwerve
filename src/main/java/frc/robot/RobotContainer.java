@@ -21,11 +21,12 @@ import frc.robot.subsystems.drive.module.ModuleIOSim;
 import frc.robot.subsystems.drive.module.ModuleIOSpark;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandPS4Controller;
-import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 
 import frc.robot.subsystems.vision.Vision;
 import frc.robot.subsystems.vision.VisionIO;
+import frc.robot.subsystems.vision.VisionIOPhotonPoseEstimator;
+import frc.robot.subsystems.vision.VisionIOPhotonPoseEstimatorSim;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
 import org.ironmaple.simulation.SimulatedArena;
@@ -49,6 +50,7 @@ public class RobotContainer {
 	private SwerveDriveSimulation simulation = null;
 
 	private boolean useMapleSim = false;
+	private boolean usePhotonPoseEstimator = false;
 
 	// The driver's controller
 	CommandPS4Controller driverController = new CommandPS4Controller(OIConstants.driverControllerPort);
@@ -68,10 +70,17 @@ public class RobotContainer {
 					(pose) -> {
 					});
 
-			vision = new Vision(
-					robotDrive::addVisionMeasurement,
-					new VisionIOPhotonVision(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM),
-					new VisionIOPhotonVision(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM));
+			if (usePhotonPoseEstimator) {
+				vision = new Vision(
+						robotDrive::addVisionMeasurement,
+						new VisionIOPhotonPoseEstimator(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM),
+						new VisionIOPhotonPoseEstimator(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM));
+			} else {
+				vision = new Vision(
+						robotDrive::addVisionMeasurement,
+						new VisionIOPhotonVision(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM),
+						new VisionIOPhotonVision(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM));
+			}
 
 		} else if (Robot.isSimulation()) {
 			if (useMapleSim) {
@@ -93,47 +102,45 @@ public class RobotContainer {
 
 			} else {
 				robotDrive = new Drive(
-						new GyroIO() {
-						},
+						new GyroIO() {},
 						new ModuleIOSim(),
 						new ModuleIOSim(),
 						new ModuleIOSim(),
 						new ModuleIOSim(),
-						(pose) -> {
-						});
+						(pose) -> {});
 			}
 
-			vision = new Vision(
-					robotDrive::addVisionMeasurement,
-					new VisionIOPhotonVisionSim(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM,
-							robotDrive::getPose),
-					new VisionIOPhotonVisionSim(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM,
-							robotDrive::getPose));
+			if (usePhotonPoseEstimator) {
+				vision = new Vision(
+					robotDrive::addVisionMeasurement, 
+					new VisionIOPhotonPoseEstimatorSim(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM,
+						robotDrive::getPose),
+					new VisionIOPhotonPoseEstimatorSim(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM, 
+						robotDrive::getPose));
+			} else {
+				vision = new Vision(
+						robotDrive::addVisionMeasurement,
+						new VisionIOPhotonVisionSim(REEF_CAMERA_NAME, ROBOT_TO_REEF_CAM,
+								robotDrive::getPose),
+						new VisionIOPhotonVisionSim(STATION_CAMERA_NAME, ROBOT_TO_STATION_CAM,
+								robotDrive::getPose));
+			}
 		} else {
 			robotDrive = new Drive(
-					new GyroIO() {
-					},
-					new ModuleIO() {
-					},
-					new ModuleIO() {
-					},
-					new ModuleIO() {
-					},
-					new ModuleIO() {
-					},
-					(pose) -> {
-					});
+					new GyroIO() {},
+					new ModuleIO() {},
+					new ModuleIO() {},
+					new ModuleIO() {},
+					new ModuleIO() {},
+					(pose) -> {});
 
-			vision = new Vision(robotDrive::addVisionMeasurement, new VisionIO() {
-			}, new VisionIO() {
-			});
+			vision = new Vision(robotDrive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
 		}
 
 		// TODO: Setup auto routines
 
 		// Configure the button bindings
 		configureButtonBindings();
-
 	}
 
 	/**
