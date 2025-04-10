@@ -30,14 +30,17 @@ public class VisionIOPhotonPoseEstimator extends VisionIOPhotonVision {
         List<TargetObservation> targetObservations = new LinkedList<>();
 
         for(PhotonPipelineResult result : results) {
-            PhotonTrackedTarget target = result.getBestTarget();
-
-            if (target != null) {
-                targetObservations.add(
-                    new TargetObservation(
-                        Rotation2d.fromDegrees(target.getYaw()), 
-                        Rotation2d.fromDegrees(target.getPitch())));
+            var targets = result.getTargets();
+            
+            for(PhotonTrackedTarget target : targets) {
+                if (target != null) {
+                    targetObservations.add(
+                            new TargetObservation(
+                                    Rotation2d.fromDegrees(target.getYaw()),
+                                    Rotation2d.fromDegrees(target.getPitch())));
+                }
             }
+            
 
             var pose = poseEstimator.update(result, camera.getCameraMatrix(), camera.getDistCoeffs());
 
