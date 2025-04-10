@@ -7,8 +7,10 @@ package frc.robot;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.PS4Controller;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.Constants.OIConstants;
 import frc.robot.commands.DriveCommands;
 import frc.robot.subsystems.drive.Drive;
@@ -34,6 +36,9 @@ import frc.robot.util.Features;
 import org.ironmaple.simulation.SimulatedArena;
 import org.ironmaple.simulation.drivesims.SwerveDriveSimulation;
 import org.littletonrobotics.junction.Logger;
+
+import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.path.PathConstraints;
 
 import static frc.robot.Constants.VisionConstants.*;
 
@@ -171,7 +176,24 @@ public class RobotContainer {
 				: () -> robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
 
 		driverController.share().onTrue(Commands.runOnce(resetGyro, robotDrive).ignoringDisable(true));
-	}
+
+        // if (AutoBuilder.isConfigured()) {
+        //     // Add a button to run pathfinding commands to SmartDashboard
+        //     SmartDashboard.putData("Pathfind to Pickup Pos", AutoBuilder.pathfindToPose(
+        //             new Pose2d(14.0, 6.5, Rotation2d.fromDegrees(0)),
+        //             new PathConstraints(
+        //                     4.0, 4.0,
+        //                     Units.degreesToRadians(360), Units.degreesToRadians(540)),
+        //             0));
+        //     SmartDashboard.putData("Pathfind to Scoring Pos", AutoBuilder.pathfindToPose(
+        //             new Pose2d(2.15, 3.0, Rotation2d.fromDegrees(180)),
+        //             new PathConstraints(
+        //                     4.0, 4.0,
+        //                     Units.degreesToRadians(360), Units.degreesToRadians(540)),
+        //             0));
+
+        // }
+    }
 
 	public void resetSimulationField() {
 		if (!Robot.isSimulation() || simulation == null)
