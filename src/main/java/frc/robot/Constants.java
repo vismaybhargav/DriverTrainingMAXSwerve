@@ -7,6 +7,7 @@ package frc.robot;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.apriltag.AprilTagFields;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Rotation3d;
 import edu.wpi.first.math.geometry.Transform3d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
@@ -184,8 +185,12 @@ public final class Constants {
     public static String REEF_CAMERA_NAME = "Reef Camera";
     public static String STATION_CAMERA_NAME = "Station Camera";
 
-    public static Transform3d ROBOT_TO_REEF_CAM = new Transform3d();
-    public static Transform3d ROBOT_TO_STATION_CAM = new Transform3d();
+    public static final Transform3d ROBOT_TO_REEF_CAM =
+		new Transform3d(Units.inchesToMeters(7.129), -Units.inchesToMeters(4.306),
+		Units.inchesToMeters(14.56), new Rotation3d(0.0, 0.0, 0.0));
+	public static final Transform3d ROBOT_TO_STATION_CAM =
+		new Transform3d(-Units.inchesToMeters(8.875), -Units.inchesToMeters(9.5),
+		Units.inchesToMeters(37.596), new Rotation3d(0.0, -Math.toRadians(19), Math.PI));
 
     public static double MAX_AMBIGUITY = 0.5;
     public static double MAX_Z_ERROR = 5.0; // meters
