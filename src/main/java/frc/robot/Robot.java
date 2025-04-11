@@ -119,6 +119,8 @@ public class Robot extends LoggedRobot {
     if (m_autonomousCommand != null) {
       m_autonomousCommand.cancel();
     }
+
+    m_robotContainer.robotDrive.pathFindToOrigin();
   }
 
   /** This function is called periodically during operator control. */
@@ -136,7 +138,13 @@ public class Robot extends LoggedRobot {
   public void testPeriodic() {}
 
   @Override
+  public void simulationInit() {
+    m_robotContainer.resetSimulationField();
+  }
+
+  @Override
   public void simulationPeriodic() {
+    Logger.recordOutput("Target Pose", new Pose2d(6, 7.8, new Rotation2d()));
     m_robotContainer.updateSimulation();
   }
 }

@@ -23,6 +23,7 @@ import frc.robot.subsystems.drive.module.ModuleIOSim;
 import frc.robot.subsystems.drive.module.ModuleIOSpark;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.button.CommandPS4Controller;
+import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 
 import frc.robot.subsystems.vision.Vision;
@@ -50,15 +51,15 @@ import static frc.robot.Constants.VisionConstants.*;
  */
 public class RobotContainer {
 	// The robot's subsystems
-	private final Drive robotDrive;
+	public final Drive robotDrive;
 	private final Vision vision;
 
 	// The simulation
 	private SwerveDriveSimulation simulation = null;
 
 	// The driver's controller
-	CommandPS4Controller driverController = new CommandPS4Controller(OIConstants.driverControllerPort);
-	PS4Controller driveControllerHID = driverController.getHID();
+	CommandXboxController driverController = new CommandXboxController(OIConstants.driverControllerPort);
+	XboxController driveControllerHID = driverController.getHID();
 
 	/**
 	 * The container for the robot. Contains subsystems, OI devices, and commands.
@@ -141,7 +142,19 @@ public class RobotContainer {
 			vision = new Vision(robotDrive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
 		}
 
-		// TODO: Setup auto routines
+        // Add a button to run pathfinding commands to SmartDashboard
+        SmartDashboard.putData("Pathfind to Pickup Pos", AutoBuilder.pathfindToPose(
+                new Pose2d(14.0, 6.5, Rotation2d.fromDegrees(0)),
+                new PathConstraints(
+                        4.0, 4.0,
+                        Units.degreesToRadians(360), Units.degreesToRadians(540)),
+                0));
+        SmartDashboard.putData("Pathfind to Scoring Pos", AutoBuilder.pathfindToPose(
+                new Pose2d(2.15, 3.0, Rotation2d.fromDegrees(180)),
+                new PathConstraints(
+                        4.0, 4.0,
+                        Units.degreesToRadians(360), Units.degreesToRadians(540)),
+                0));
 
 		// Configure the button bindings
 		configureButtonBindings();
@@ -175,24 +188,8 @@ public class RobotContainer {
 						simulation.getSimulatedDriveTrainPose())
 				: () -> robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
 
-		driverController.share().onTrue(Commands.runOnce(resetGyro, robotDrive).ignoringDisable(true));
-
-        // if (AutoBuilder.isConfigured()) {
-        //     // Add a button to run pathfinding commands to SmartDashboard
-        //     SmartDashboard.putData("Pathfind to Pickup Pos", AutoBuilder.pathfindToPose(
-        //             new Pose2d(14.0, 6.5, Rotation2d.fromDegrees(0)),
-        //             new PathConstraints(
-        //                     4.0, 4.0,
-        //                     Units.degreesToRadians(360), Units.degreesToRadians(540)),
-        //             0));
-        //     SmartDashboard.putData("Pathfind to Scoring Pos", AutoBuilder.pathfindToPose(
-        //             new Pose2d(2.15, 3.0, Rotation2d.fromDegrees(180)),
-        //             new PathConstraints(
-        //                     4.0, 4.0,
-        //                     Units.degreesToRadians(360), Units.degreesToRadians(540)),
-        //             0));
-
-        // }
+		driverController.start().onTrue(Commands.runOnce(resetGyro, robotDrive).ignoringDisable(true));
+        driverController.x().onTrue(robotDrive.pathFindToOrigin());
     }
 
 	public void resetSimulationField() {

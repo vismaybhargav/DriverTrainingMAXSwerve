@@ -31,6 +31,8 @@ import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Robot;
 import frc.robot.subsystems.drive.module.*;
@@ -38,9 +40,12 @@ import frc.robot.subsystems.drive.module.Module;
 import frc.robot.util.LocalADStarAK;
 import frc.robot.subsystems.drive.gyro.*;
 
+import java.io.IOException;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+
+import org.json.simple.parser.ParseException;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
@@ -48,7 +53,9 @@ import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.config.PIDConstants;
 import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
+import com.pathplanner.lib.path.PathConstraints;
 import com.pathplanner.lib.pathfinding.Pathfinding;
+import com.pathplanner.lib.util.swerve.SwerveSetpointGenerator;
 
 public class Drive extends SubsystemBase {
     static final Lock odometryLock = new ReentrantLock();
@@ -57,6 +64,8 @@ public class Drive extends SubsystemBase {
     private final Module[] modules = new Module[4]; // FL, FR, BL, BR
     private final Alert gyroDisconnectedAlert =
             new Alert("Disconnected gyro, using kinematics as fallback.", AlertType.kError);
+    private RobotConfig ppConfig;
+    private final SwerveSetpointGenerator setpointGenerator;
 
     private Rotation2d rawGyroRotation = new Rotation2d();
     private final SwerveModulePosition[] lastModulePositions = // For delta tracking
@@ -88,12 +97,46 @@ public class Drive extends SubsystemBase {
             ModuleIO blModuleIO,
             ModuleIO brModuleIO,
             Consumer<Pose2d> resetSimulationPoseCallBack) {
+        //System.out.println(AutoBuilder.isConfigured());
+
         this.gyroIO = gyroIO;
         this.resetSimulationPoseCallBack = resetSimulationPoseCallBack;
         modules[0] = new Module(flModuleIO, 0);
         modules[1] = new Module(frModuleIO, 1);
         modules[2] = new Module(blModuleIO, 2);
         modules[3] = new Module(brModuleIO, 3);
+
+        Pathfinding.setPathfinder(new LocalADStarAK());
+        System.out.println("hello1");
+            
+        try {
+            ppConfig = RobotConfig.fromGUISettings();
+        } catch(IOException ioe) {
+            System.out.println("Error loading PathPlanner config: " + ioe.getMessage());
+        } catch(ParseException pe) {
+            System.out.println("Error parsing PathPlanner config: " + pe.getMessage());
+        }
+        System.out.println("hello2");
+
+        AutoBuilder.configure(
+                this::getPose,
+                this::resetOdometry,
+                this::getChassisSpeeds,
+                (speeds, feedforwards) -> runVelocity(speeds),
+                new PPHolonomicDriveController(
+                        new PIDConstants(5, 0, 0),
+                        new PIDConstants(5, 0, 0)),
+                ppConfig,
+                () -> {
+                    var alliance = DriverStation.getAlliance();
+                    if (alliance.isPresent()) {
+                        return alliance.get() == DriverStation.Alliance.Red;
+                    }
+                    return false;
+                },
+                this);
+
+        setpointGenerator = new SwerveSetpointGenerator(ppConfig, getMaxAngularSpeedRadPerSec());
 
         // Usage reporting for swerve template
         HAL.report(tResourceType.kResourceType_RobotDrive, tInstances.kRobotDriveSwerve_AdvantageKit);
@@ -189,6 +232,10 @@ public class Drive extends SubsystemBase {
         Logger.recordOutput("SwerveStates/SetpointsOptimized", setpointStates);
     }
 
+    public void runVelocityWithSetpointGen(ChassisSpeeds speeds) {
+
+    }
+
     /** Runs the drive in a straight line with the specified drive output. */
     public void runCharacterization(double output) {
         for (int i = 0; i < 4; i++) {
@@ -199,36 +246,7 @@ public class Drive extends SubsystemBase {
     /**
      * Setup PathPlanner and necessary configs
      */
-    public void setupPathPlanner() {
-        RobotConfig config = null;
-        try {
-            config = RobotConfig.fromGUISettings();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        AutoBuilder.configure(
-            this::getPose,
-            this::resetOdometry,
-            this::getChassisSpeeds,
-            (speeds, feedforwards) -> runVelocity(speeds),
-            new PPHolonomicDriveController(
-                new PIDConstants(0, 0, 0),
-                new PIDConstants(0, 0, 0)),
-            config,
-            () -> {
-                var alliance = DriverStation.getAlliance();
-                if (alliance.isPresent()) {
-                    return alliance.get() == DriverStation.Alliance.Red;
-                }
-                return false;
-            },
-            this
-        );
-
-        Pathfinding.setPathfinder(new LocalADStarAK());
-
-    }
+    public void setupPathPlanner() {}
 
     /** Stops the drive. */
     public void stop() {
@@ -336,5 +354,17 @@ public class Drive extends SubsystemBase {
     /** Returns the maximum angular speed in radians per sec. */
     public double getMaxAngularSpeedRadPerSec() {
         return maxSpeedMetersPerSecond / driveBaseRadius;
+    }
+
+    public Command pathFindToOrigin() {
+        return Commands.runOnce(() -> 
+            AutoBuilder.pathfindToPose(
+                new Pose2d(6, 7.8, new Rotation2d()), 
+                new PathConstraints(getMaxLinearSpeedMetersPerSec(), 
+                5, 
+                getMaxAngularSpeedRadPerSec(), 
+                Math.pow(getMaxAngularSpeedRadPerSec(), 2))
+                ),
+        this);
     }
 }
