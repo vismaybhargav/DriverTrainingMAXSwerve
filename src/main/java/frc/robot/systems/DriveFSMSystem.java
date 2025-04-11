@@ -12,9 +12,6 @@ import frc.robot.systems.drive.gyro.GyroIO;
 import frc.robot.systems.drive.module.ModuleIO;
 import frc.robot.systems.drive.module.Module;
 import frc.robot.Constants.DriveConstants;
-import frc.robot.vision.RaspberryPi;
-
-import jdk.jshell.spi.ExecutionControl;
 
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
@@ -42,12 +39,12 @@ public class DriveFSMSystem extends SubsystemBase {
 	public static final Lock odometryLock = new ReentrantLock();
 
 	private final GyroIO gyro;
-	private final RaspberryPi rpi;
 
 	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
 			DriveConstants.DRIVE_KINEMATICS,
 			getHeading(),
-			getModulePositions());
+			getModulePositions()
+    );
 
 	/* ======================== Constructor ======================== */
 	/**
@@ -69,7 +66,6 @@ public class DriveFSMSystem extends SubsystemBase {
 		rearRight = new Module(rearRightIO, 3);
 
 		this.gyro = gyro;
-		rpi = new RaspberryPi();
 
 		// Reset state machine
 		reset();
@@ -119,8 +115,8 @@ public class DriveFSMSystem extends SubsystemBase {
 	 *
 	 * @return if the action carried out in this state has finished executing
 	 */
-	public boolean updateAutonomous() throws ExecutionControl.NotImplementedException {
-		throw new ExecutionControl.NotImplementedException("TODO: Implement autonomous mode");
+	public boolean updateAutonomous() {
+        return true;
 	}
 
 	/* ======================== Private methods ======================== */
@@ -217,7 +213,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 *
 	 * @return Current pose of the robot
 	 */
-	@AutoLogOutput(key = "/DriveFSM/Current Pose")
+	@AutoLogOutput(key = "DriveFSM/Current Pose")
 	public Pose2d getPose() {
 		return odometry.getPoseMeters();
 	}

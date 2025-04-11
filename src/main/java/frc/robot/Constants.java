@@ -36,7 +36,7 @@ public final class Constants {
     public static final double SPEED_DAMP_FACTOR = 2;
 
     public static final double ODOMETRY_FREQUENCY = 100.0; // Hz
-    public static final double USE_ODOMETRY = true;
+    public static final boolean USE_ODOMETRY = true;
 
     // Chassis configuration
     public static final double TRACK_WIDTH_IN = Units.inchesToMeters(26.5);

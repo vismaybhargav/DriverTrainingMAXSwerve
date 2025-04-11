@@ -11,6 +11,7 @@ import edu.wpi.first.wpilibj.PowerDistribution;
 import frc.robot.input.TeleopInput;
 import frc.robot.systems.DriveFSMSystem;
 import frc.robot.systems.drive.gyro.GyroIONavX;
+import frc.robot.systems.drive.gyro.GyroIOSim;
 import frc.robot.systems.drive.module.ModuleIOSpark;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
@@ -69,7 +70,11 @@ public class Robot extends LoggedRobot {
 						new ModuleIOSpark(2),
 						new ModuleIOSpark(3)
 				);
-			}
+			} else if(Robot.isSimulation()) {
+                driveSystem = new DriveFSMSystem(
+                    new GyroIOSim(null), 
+                    new ModuleIOSim(), null, null, null)
+            }
 		}
 	}
 
@@ -116,7 +121,13 @@ public class Robot extends LoggedRobot {
 	}
 
 	@Override
-	public void simulationPeriodic() { }
+	public void simulationPeriodic() {
+        if(driveSystem == null) return;
+
+        Logger.recordOutput("DriveFSM/Odometry", driveSystem.getPose());
+        Logger.recordOutput("DriveFSM/Swerve Module States", driveSystem.getModuleStates());
+        Logger.recordOutput("DriveFSM/Chassis Speeds", driveSystem.getChassisSpeeds());
+     }
 
 	// Do not use robotPeriodic. Use mode specific periodic methods instead.
 	@Override
