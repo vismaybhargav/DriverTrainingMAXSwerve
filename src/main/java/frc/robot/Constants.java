@@ -26,6 +26,8 @@ import com.pathplanner.lib.config.ModuleConfig;
 import com.pathplanner.lib.config.RobotConfig;
 
 import static edu.wpi.first.units.Units.*;
+import static frc.robot.Constants.DriveConstants.robotLength;
+import static frc.robot.Constants.DriveConstants.robotWidth;
 import static frc.robot.Constants.ModuleConstants.*;
 
 /**
@@ -46,6 +48,7 @@ public final class Constants {
             .withCustomModuleTranslations(DriveConstants.moduleTranslations)
             .withRobotMass(DriveConstants.robotMass)
             .withGyro(COTS.ofPigeon2())
+            .withBumperSize(robotLength, robotWidth)
             .withSwerveModule(new SwerveModuleSimulationConfig(
                     ModuleConstants.driveGearbox,
                     turnGearbox,
@@ -222,6 +225,10 @@ public final class Constants {
     public static final double maxAccelerationMetersPerSecondSquared = 3;
     public static final double maxAngularSpeedRadiansPerSecond = Math.PI;
     public static final double maxAngularSpeedRadiansPerSecondSquared = Math.PI;
+
+    public static final Distance REEF_Y_LEFT_OFFSET = Inches.of(-10);
+    public static final Distance REEF_Y_RIGHT_OFFSET = Inches.of(2.5);
+    public static final Distance REEF_X_OFFSET = Meters.of(robotLength.div(2).in(Meters));
 
     public static final RobotConfig ppConfig = new RobotConfig(
       DriveConstants.robotMass.in(Kilograms), 

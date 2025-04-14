@@ -13,6 +13,7 @@ import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
 
 public /* singleton */ class FieldHelper {
@@ -59,7 +60,9 @@ public /* singleton */ class FieldHelper {
 
         Transform2d offsetTransform = new Transform2d(
             DriveConstants.robotWidth.in(Meters) / 2, // Back to Front (Don't change this one)
-            branchSide == BranchSide.LEFT ? -Units.inchesToMeters(10) : Units.inchesToMeters(4), // Side to Side
+            branchSide == BranchSide.LEFT ? 
+                AutoConstants.REEF_Y_LEFT_OFFSET.in(Meters) : 
+                AutoConstants.REEF_Y_RIGHT_OFFSET.in(Meters), // Side to Side
             Rotation2d.k180deg
         );
 

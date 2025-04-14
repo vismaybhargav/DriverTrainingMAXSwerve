@@ -12,12 +12,12 @@ import org.littletonrobotics.junction.networktables.NT4Publisher;
 import org.littletonrobotics.junction.wpilog.WPILOGReader;
 import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 
-import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.wpilibj.PowerDistribution;
 import edu.wpi.first.wpilibj.PowerDistribution.ModuleType;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.util.FieldHelper;
+import frc.robot.util.FieldHelper.BranchSide;
 import frc.robot.util.FieldHelper.ReefSide;
 
 /**
@@ -143,14 +143,10 @@ public class Robot extends LoggedRobot {
 
   @Override
   public void simulationPeriodic() {
-    Logger.recordOutput("Target Pose", m_robotContainer.targetPose);
     Logger.recordOutput("Drive/Command", m_robotContainer.robotDrive.getCurrentCommand() == null ? "NULL" : m_robotContainer.robotDrive.getCurrentCommand().getName());
 
-    Pose2d[] reefPoses = new Pose2d[ReefSide.values().length];
-    for(int i = 0; i < ReefSide.values().length; i++) {
-        reefPoses[i] = FieldHelper.getAlignedDesiredPoseForReef(ReefSide.values()[i], FieldHelper.BranchSide.RIGHT);
-    }
-    Logger.recordOutput("Reef Poses", reefPoses);
+    Logger.recordOutput("Reef Pose", m_robotContainer.reefTargetPose);
+
     m_robotContainer.updateSimulation();
   }
 }

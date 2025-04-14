@@ -7,7 +7,9 @@ package frc.robot;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.GenericHID.RumbleType;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.Constants.OIConstants;
@@ -32,6 +34,9 @@ import frc.robot.subsystems.vision.VisionIOPhotonPoseEstimatorSim;
 import frc.robot.subsystems.vision.VisionIOPhotonVision;
 import frc.robot.subsystems.vision.VisionIOPhotonVisionSim;
 import frc.robot.util.Features;
+import frc.robot.util.FieldHelper;
+import frc.robot.util.FieldHelper.BranchSide;
+import frc.robot.util.FieldHelper.ReefSide;
 
 import org.ironmaple.simulation.SimulatedArena;
 import org.ironmaple.simulation.drivesims.SwerveDriveSimulation;
@@ -60,10 +65,11 @@ public class RobotContainer {
 	CommandXboxController driverController = new CommandXboxController(OIConstants.driverControllerPort);
 	XboxController driveControllerHID = driverController.getHID();
 
+	private int reefSideOrdinal = 0;
+	public Pose2d reefTargetPose = new Pose2d(); 
+
 	// The path chooser
 	private final SendableChooser<Command> autoChooser;
-
-	Pose2d targetPose = new Pose2d(4.5, 6, new Rotation2d());
 
 	/**
 	 * The container for the robot. Contains subsystems, OI devices, and commands.
@@ -95,7 +101,7 @@ public class RobotContainer {
 			if (Features.MAPLE_SIM_ENABLED) {
 				simulation = new SwerveDriveSimulation(
 						Constants.SimConstants.mapleSimConfig,
-						new Pose2d(3, 3, new Rotation2d()));
+						new Pose2d(0, 0, new Rotation2d()));
 
 				SimulatedArena.getInstance().addDriveTrainSimulation(simulation);
 
@@ -176,16 +182,19 @@ public class RobotContainer {
 						() -> -MathUtil.applyDeadband(driveControllerHID.getRightX(),
 								OIConstants.driveDeadband)));
 
-		final Runnable resetGyro = Robot.isSimulation()
+		final Runnable resetGyro = Robot.isSimulation() && Features.MAPLE_SIM_ENABLED
 				? () -> robotDrive.resetOdometry(
 						simulation.getSimulatedDriveTrainPose())
 				: () -> robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
 
 		driverController.start().onTrue(Commands.runOnce(resetGyro, robotDrive).ignoringDisable(true));
 
+		driverController.leftBumper().onTrue(Commands.runOnce(() -> updateReefSide(-1)));
+		driverController.rightBumper().onTrue(Commands.runOnce(() -> updateReefSide(1)));
+
         driverController.x().onTrue(
             AutoBuilder.pathfindToPose(
-                new Pose2d(3, 3, new Rotation2d()),
+                getReefTargetPose(),
                 new PathConstraints(
 					robotDrive.getMaxLinearSpeedMetersPerSec(), 
     	            5, 
@@ -208,7 +217,7 @@ public class RobotContainer {
 	}
 
 	public void updateSimulation() {
-		if (!Robot.isSimulation() || simulation == null)
+		if (!Robot.isSimulation() || !Features.MAPLE_SIM_ENABLED)
 			return;
 
 		SimulatedArena.getInstance().simulationPeriodic();
@@ -217,5 +226,21 @@ public class RobotContainer {
 				SimulatedArena.getInstance().getGamePiecesArrayByType("Coral"));
 		Logger.recordOutput("Field Simulation/Algae",
 				SimulatedArena.getInstance().getGamePiecesArrayByType("Algae"));
+	}
+
+	public void updateReefSide(double inc) {
+		reefSideOrdinal += inc;
+
+		reefTargetPose = 
+			FieldHelper.getAlignedDesiredPoseForReef(
+				ReefSide.values()[
+					Math.abs(reefSideOrdinal % ReefSide.values().length)
+				], 
+				BranchSide.LEFT
+			);
+	}
+
+	public Pose2d getReefTargetPose() {
+		return reefTargetPose;
 	}
 }
