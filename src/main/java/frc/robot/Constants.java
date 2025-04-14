@@ -14,6 +14,9 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.units.measure.Distance;
+import edu.wpi.first.units.measure.Mass;
+import edu.wpi.first.units.measure.MomentOfInertia;
 import frc.robot.subsystems.drive.Drive;
 import org.ironmaple.simulation.drivesims.COTS;
 import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
@@ -41,7 +44,7 @@ public final class Constants {
   public static final class SimConstants {
     public static final DriveTrainSimulationConfig mapleSimConfig = DriveTrainSimulationConfig.Default()
             .withCustomModuleTranslations(DriveConstants.moduleTranslations)
-            .withRobotMass(Kilogram.of(DriveConstants.robotMassKg))
+            .withRobotMass(DriveConstants.robotMass)
             .withGyro(COTS.ofPigeon2())
             .withSwerveModule(new SwerveModuleSimulationConfig(
                     ModuleConstants.driveGearbox,
@@ -67,8 +70,11 @@ public final class Constants {
     // Distance between centers of right and left wheels on robot
     public static final double wheelBase = Units.inchesToMeters(22.75);
 
-    public static final double robotMassKg = 45;
-    public static final double robotMOI = 6.883;
+    public static final Mass robotMass = Kilogram.of(45); 
+    public static final MomentOfInertia robotMOI = KilogramSquareMeters.of(6.883);
+
+    public static final Distance robotWidth = Inches.of(35.5);
+    public static final Distance robotLength = Inches.of(35.5);
 
     public static final double driveBaseRadius = Math.hypot(trackWidth / 2.0, wheelBase / 2.0);
     // Distance between front and back wheels on robot
@@ -218,8 +224,8 @@ public final class Constants {
     public static final double maxAngularSpeedRadiansPerSecondSquared = Math.PI;
 
     public static final RobotConfig ppConfig = new RobotConfig(
-      DriveConstants.robotMassKg, 
-      DriveConstants.robotMOI, 
+      DriveConstants.robotMass.in(Kilograms), 
+      DriveConstants.robotMOI.in(KilogramSquareMeters), 
       new ModuleConfig(
               Units.inchesToMeters(3),
               maxSpeedMetersPerSecond,

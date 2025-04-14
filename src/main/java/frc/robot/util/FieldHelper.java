@@ -1,5 +1,6 @@
 package frc.robot.util;
 
+import static edu.wpi.first.units.Units.Meters;
 import static frc.robot.Constants.VisionConstants.TAG_LAYOUT;
 
 import java.util.HashMap;
@@ -7,8 +8,12 @@ import java.util.Map;
 
 import edu.wpi.first.apriltag.AprilTag;
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
+import frc.robot.Constants.DriveConstants;
 
 public /* singleton */ class FieldHelper {
 
@@ -16,17 +21,11 @@ public /* singleton */ class FieldHelper {
      * Reef Side A starts at the one closest to the driver station wall, and then moves counter clockwise around
      */
     public static enum ReefSide {
-        A,
-        B,
-        C,
-        D,
-        E,
-        F,
+        A, B, C, D, E, F
     }
 
     public static enum BranchSide {
-        LEFT,
-        RIGHT
+        LEFT, RIGHT
     }
 
     public static Map<ReefSide, AprilTag> blueReefAprilTags = new HashMap<>();
@@ -55,16 +54,15 @@ public /* singleton */ class FieldHelper {
     public static Pose2d getAlignedDesiredPoseForReef(ReefSide reefSide, BranchSide branchSide) {
         Map<ReefSide, AprilTag> mapToUse;
 
-        if(DriverStation.getAlliance().isPresent() && DriverStation.getAlliance().get() == Alliance.Red) {
-            mapToUse = redReefAprilTags;
-        } else if(DriverStation.getAlliance().isPresent()) {
-            mapToUse = blueReefAprilTags;
-        } else {
-            throw new IllegalStateException("You are not red or blue alliance!");
-        }
-
+        mapToUse = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue ? blueReefAprilTags : redReefAprilTags;
         Pose2d atPose = mapToUse.get(reefSide).pose.toPose2d();
 
-        atPose.tran
+        Transform2d offsetTransform = new Transform2d(
+            DriveConstants.robotWidth.in(Meters) / 2, // Back to Front (Don't change this one)
+            branchSide == BranchSide.LEFT ? -Units.inchesToMeters(10) : Units.inchesToMeters(4), // Side to Side
+            Rotation2d.k180deg
+        );
+
+        return atPose.transformBy(offsetTransform);
     }
 }

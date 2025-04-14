@@ -13,11 +13,12 @@ import org.littletonrobotics.junction.wpilog.WPILOGReader;
 import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.PowerDistribution;
 import edu.wpi.first.wpilibj.PowerDistribution.ModuleType;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import frc.robot.util.FieldHelper;
+import frc.robot.util.FieldHelper.ReefSide;
 
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
@@ -144,6 +145,12 @@ public class Robot extends LoggedRobot {
   public void simulationPeriodic() {
     Logger.recordOutput("Target Pose", m_robotContainer.targetPose);
     Logger.recordOutput("Drive/Command", m_robotContainer.robotDrive.getCurrentCommand() == null ? "NULL" : m_robotContainer.robotDrive.getCurrentCommand().getName());
+
+    Pose2d[] reefPoses = new Pose2d[ReefSide.values().length];
+    for(int i = 0; i < ReefSide.values().length; i++) {
+        reefPoses[i] = FieldHelper.getAlignedDesiredPoseForReef(ReefSide.values()[i], FieldHelper.BranchSide.RIGHT);
+    }
+    Logger.recordOutput("Reef Poses", reefPoses);
     m_robotContainer.updateSimulation();
   }
 }
