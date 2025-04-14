@@ -53,9 +53,11 @@ public /* singleton */ class FieldHelper {
     }
 
     public static Pose2d getAlignedDesiredPoseForReef(ReefSide reefSide, BranchSide branchSide) {
-        Map<ReefSide, AprilTag> mapToUse;
-
-        mapToUse = DriverStation.getAlliance().orElse(Alliance.Blue) == Alliance.Blue ? blueReefAprilTags : redReefAprilTags;
+        Map<ReefSide, AprilTag> mapToUse = DriverStation
+            .getAlliance()
+            .orElse(Alliance.Blue) == Alliance.Blue 
+                ? blueReefAprilTags : redReefAprilTags;
+        
         Pose2d atPose = mapToUse.get(reefSide).pose.toPose2d();
 
         Transform2d offsetTransform = new Transform2d(
