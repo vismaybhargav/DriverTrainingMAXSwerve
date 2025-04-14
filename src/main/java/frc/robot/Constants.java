@@ -14,13 +14,16 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import frc.robot.subsystems.drive.Drive;
 import org.ironmaple.simulation.drivesims.COTS;
 import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
 import org.ironmaple.simulation.drivesims.configs.SwerveModuleSimulationConfig;
 
+import com.pathplanner.lib.config.ModuleConfig;
+import com.pathplanner.lib.config.RobotConfig;
+
 import static edu.wpi.first.units.Units.*;
-import static frc.robot.Constants.ModuleConstants.turnGearbox;
-import static frc.robot.Constants.ModuleConstants.turnMotorReduction;
+import static frc.robot.Constants.ModuleConstants.*;
 
 /**
  * The Constants class provides a convenient place for teams to hold robot-wide
@@ -43,7 +46,7 @@ public final class Constants {
             .withSwerveModule(new SwerveModuleSimulationConfig(
                     ModuleConstants.driveGearbox,
                     turnGearbox,
-                    ModuleConstants.driveMotorReduction,
+                    ModuleConstants.drivingMotorReduction,
                     turnMotorReduction,
                     Volts.of(0.1),
                     Volts.of(0.1),
@@ -65,6 +68,7 @@ public final class Constants {
     public static final double wheelBase = Units.inchesToMeters(22.75);
 
     public static final double robotMassKg = 45;
+    public static final double robotMOI = 6.883;
 
     public static final double driveBaseRadius = Math.hypot(trackWidth / 2.0, wheelBase / 2.0);
     // Distance between front and back wheels on robot
@@ -155,8 +159,6 @@ public final class Constants {
     // Drive motor configuration
     public static final int driveMotorCurrentLimit = 60;
     public static final double wheelRadiusMeters = Units.inchesToMeters(1.5);
-    public static final double driveMotorReduction =
-            (45.0 * 22.0) / (14.0 * 15.0); // MAXSwerve with 14 pinion teeth and 22 spur teeth
     public static final DCMotor driveGearbox = DCMotor.getNEO(1);
 
     // Drive encoder configuration
@@ -214,6 +216,18 @@ public final class Constants {
     public static final double maxAccelerationMetersPerSecondSquared = 3;
     public static final double maxAngularSpeedRadiansPerSecond = Math.PI;
     public static final double maxAngularSpeedRadiansPerSecondSquared = Math.PI;
+
+    public static final RobotConfig ppConfig = new RobotConfig(
+      DriveConstants.robotMassKg, 
+      DriveConstants.robotMOI, 
+      new ModuleConfig(
+              Units.inchesToMeters(3),
+              maxSpeedMetersPerSecond,
+              1.2,
+              driveGearbox.withReduction(drivingMotorReduction),
+              driveMotorCurrentLimit,
+              1),
+            DriveConstants.moduleTranslations);
 
     public static final double pXController = 1;
     public static final double pYController = 1;

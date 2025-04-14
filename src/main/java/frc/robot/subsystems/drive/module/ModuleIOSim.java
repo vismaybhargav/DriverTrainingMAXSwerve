@@ -2,7 +2,7 @@ package frc.robot.subsystems.drive.module;
 
 import static frc.robot.Constants.DriveConstants.*;
 import static frc.robot.Constants.ModuleConstants.driveGearbox;
-import static frc.robot.Constants.ModuleConstants.driveMotorReduction;
+import static frc.robot.Constants.ModuleConstants.drivingMotorReduction;
 import static frc.robot.Constants.ModuleConstants.turnGearbox;
 import static frc.robot.Constants.ModuleConstants.turnMotorReduction;
 
@@ -30,7 +30,7 @@ public class ModuleIOSim implements ModuleIO {
     // Create drive and turn sim models
     driveSim =
         new DCMotorSim(
-            LinearSystemId.createDCMotorSystem(driveGearbox, 0.025, driveMotorReduction),
+            LinearSystemId.createDCMotorSystem(driveGearbox, 0.025, drivingMotorReduction),
             driveGearbox);
     turnSim =
         new DCMotorSim(

@@ -13,7 +13,6 @@
 
 package frc.robot.subsystems.drive.module;
 
-import static frc.robot.Constants.DriveConstants.*;
 import static frc.robot.Constants.ModuleConstants.*;
 
 import edu.wpi.first.math.geometry.Rotation2d;

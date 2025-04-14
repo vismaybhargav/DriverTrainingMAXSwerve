@@ -7,9 +7,8 @@ package frc.robot;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.PS4Controller;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.Constants.OIConstants;
 import frc.robot.commands.DriveCommands;
@@ -21,8 +20,8 @@ import frc.robot.subsystems.drive.module.ModuleIO;
 import frc.robot.subsystems.drive.module.ModuleIOMapleSim;
 import frc.robot.subsystems.drive.module.ModuleIOSim;
 import frc.robot.subsystems.drive.module.ModuleIOSpark;
+import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
-import edu.wpi.first.wpilibj2.command.button.CommandPS4Controller;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.JoystickButton;
 
@@ -60,6 +59,11 @@ public class RobotContainer {
 	// The driver's controller
 	CommandXboxController driverController = new CommandXboxController(OIConstants.driverControllerPort);
 	XboxController driveControllerHID = driverController.getHID();
+
+	// The path chooser
+	private final SendableChooser<Command> autoChooser;
+
+	Pose2d targetPose = new Pose2d(4.5, 6, new Rotation2d());
 
 	/**
 	 * The container for the robot. Contains subsystems, OI devices, and commands.
@@ -142,19 +146,8 @@ public class RobotContainer {
 			vision = new Vision(robotDrive::addVisionMeasurement, new VisionIO() {}, new VisionIO() {});
 		}
 
-        // Add a button to run pathfinding commands to SmartDashboard
-        SmartDashboard.putData("Pathfind to Pickup Pos", AutoBuilder.pathfindToPose(
-                new Pose2d(14.0, 6.5, Rotation2d.fromDegrees(0)),
-                new PathConstraints(
-                        4.0, 4.0,
-                        Units.degreesToRadians(360), Units.degreesToRadians(540)),
-                0));
-        SmartDashboard.putData("Pathfind to Scoring Pos", AutoBuilder.pathfindToPose(
-                new Pose2d(2.15, 3.0, Rotation2d.fromDegrees(180)),
-                new PathConstraints(
-                        4.0, 4.0,
-                        Units.degreesToRadians(360), Units.degreesToRadians(540)),
-                0));
+		autoChooser = AutoBuilder.buildAutoChooser();
+		SmartDashboard.putData("Auto Chooser", autoChooser);
 
 		// Configure the button bindings
 		configureButtonBindings();
@@ -189,7 +182,17 @@ public class RobotContainer {
 				: () -> robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
 
 		driverController.start().onTrue(Commands.runOnce(resetGyro, robotDrive).ignoringDisable(true));
-        driverController.x().onTrue(robotDrive.pathFindToOrigin());
+
+        driverController.x().onTrue(
+            AutoBuilder.pathfindToPose(
+                new Pose2d(3, 3, new Rotation2d()),
+                new PathConstraints(
+					robotDrive.getMaxLinearSpeedMetersPerSec(), 
+    	            5, 
+                	robotDrive.getMaxAngularSpeedRadPerSec(), 
+               		Math.pow(robotDrive.getMaxAngularSpeedRadPerSec(), 2))
+				)
+			);
     }
 
 	public void resetSimulationField() {
@@ -198,6 +201,10 @@ public class RobotContainer {
 
 		robotDrive.resetOdometry(new Pose2d(3, 3, new Rotation2d()));
 		SimulatedArena.getInstance().resetFieldForAuto();
+	}
+
+	public Command getAutonomousCommand() {
+		return autoChooser.getSelected();
 	}
 
 	public void updateSimulation() {
