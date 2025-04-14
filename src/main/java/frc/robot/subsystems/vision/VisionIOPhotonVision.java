@@ -1,6 +1,5 @@
 package frc.robot.subsystems.vision;
 
-import static edu.wpi.first.units.Units.Seconds;
 import static frc.robot.Constants.VisionConstants.*;
 
 import edu.wpi.first.math.geometry.Pose3d;
@@ -57,7 +56,7 @@ public class VisionIOPhotonVision implements VisionIO {
 
                 poseObservations.add(
                         new PoseObservation(
-                                Seconds.of(result.getTimestampSeconds()),
+                                result.getTimestampSeconds(),
                                 robotPose,
                                 multiTagResult.estimatedPose.ambiguity,
                                 multiTagResult.fiducialIDsUsed.size(),
@@ -79,7 +78,7 @@ public class VisionIOPhotonVision implements VisionIO {
 
                     poseObservations.add(
                             new PoseObservation(
-                                    Seconds.of(result.getTimestampSeconds()),
+                                    result.getTimestampSeconds(),
                                     robotPose,
                                     target.getPoseAmbiguity(),
                                     1,

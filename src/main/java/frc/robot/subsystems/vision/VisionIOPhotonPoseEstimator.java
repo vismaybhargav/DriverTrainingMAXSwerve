@@ -1,6 +1,5 @@
 package frc.robot.subsystems.vision;
 
-import static edu.wpi.first.units.Units.Seconds;
 import static frc.robot.Constants.VisionConstants.TAG_LAYOUT;
 
 import java.util.LinkedList;
@@ -54,7 +53,7 @@ public class VisionIOPhotonPoseEstimator extends VisionIOPhotonVision {
                 var averageTagDist = totalTagDist / estPose.targetsUsed.size();
 
                 poseObservations.add(new PoseObservation(
-                        Seconds.of(estPose.timestampSeconds),
+                        estPose.timestampSeconds,
                         estPose.estimatedPose,
                         0, //TODO: How do we get the ambiguity from this?
                         estPose.targetsUsed.size(),

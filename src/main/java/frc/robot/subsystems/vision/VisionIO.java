@@ -2,7 +2,6 @@ package frc.robot.subsystems.vision;
 
 import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
-import edu.wpi.first.units.measure.Time;
 import org.littletonrobotics.junction.AutoLog;
 
 public interface VisionIO {
@@ -19,7 +18,7 @@ public interface VisionIO {
 
     /** Represents a robot pose sample used for pose estimation */
     public static record PoseObservation(
-            Time timestamp,
+            double timestampSeconds, // Has to be a double because AdvantageScope doesn't like the Time class
             Pose3d pose,
             double ambiguity,
             int tagCount,

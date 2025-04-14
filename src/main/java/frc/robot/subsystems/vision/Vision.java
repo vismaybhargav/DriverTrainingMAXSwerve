@@ -7,7 +7,6 @@ import edu.wpi.first.math.geometry.Pose3d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import org.littletonrobotics.junction.Logger;
 
@@ -97,7 +96,7 @@ public class Vision extends SubsystemBase {
 
                 visionConsumer.accept(
                         poseObservation.pose().toPose2d(),
-                        poseObservation.timestamp(),
+                        poseObservation.timestampSeconds(),
                         VecBuilder.fill(linearStdDev, linearStdDev, angularStdDev)
                 );
                 Logger.recordOutput(
@@ -134,6 +133,6 @@ public class Vision extends SubsystemBase {
 
     @FunctionalInterface
     public static interface VisionConsumer {
-        void accept(Pose2d pose2d, Time timestamp, Matrix<N3, N1> visionMeasurementStdDevs);
+        void accept(Pose2d pose2d, double timestampSeconds, Matrix<N3, N1> visionMeasurementStdDevs);
     }
 }
