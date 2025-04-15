@@ -14,7 +14,6 @@
 package frc.robot.subsystems.drive;
 
 import static edu.wpi.first.units.Units.MetersPerSecond;
-import static edu.wpi.first.units.Units.Seconds;
 import static frc.robot.Constants.DriveConstants.*;
 
 import edu.wpi.first.hal.FRCNetComm.tInstances;
@@ -28,22 +27,16 @@ import edu.wpi.first.math.geometry.Twist2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
-import edu.wpi.first.math.util.Units;
-import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.AutoConstants;
 import frc.robot.Constants.DriveConstants;
-import frc.robot.Constants.ModuleConstants;
 import frc.robot.Robot;
 import frc.robot.subsystems.drive.module.*;
 import frc.robot.subsystems.drive.module.Module;
-import frc.robot.util.Features;
 import frc.robot.util.LocalADStarAK;
 import frc.robot.subsystems.drive.gyro.*;
 
@@ -51,7 +44,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
-import org.dyn4j.geometry.Feature;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
@@ -59,7 +51,6 @@ import com.pathplanner.lib.auto.AutoBuilder;
 import com.pathplanner.lib.config.PIDConstants;
 import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
-import com.pathplanner.lib.path.PathConstraints;
 import com.pathplanner.lib.pathfinding.Pathfinding;
 import com.pathplanner.lib.util.PathPlannerLogging;
 import com.pathplanner.lib.util.swerve.SwerveSetpointGenerator;
@@ -348,10 +339,6 @@ public class Drive extends SubsystemBase {
 
         odometry.resetPosition(getRotation(), getModulePositions(), pose);
         poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
-    }
-
-    public void onlyResetOdometry(Pose2d pose) {
-        odometry.resetPose(pose);
     }
 
     /**

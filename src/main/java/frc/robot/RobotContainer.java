@@ -192,7 +192,7 @@ public class RobotContainer {
 		driverController.leftBumper().onTrue(Commands.runOnce(() -> updateReefSide(-1)));
 		driverController.rightBumper().onTrue(Commands.runOnce(() -> updateReefSide(1)));
 
-        driverController.x().onTrue(
+        driverController.x().whileTrue(
             AutoBuilder.pathfindToPose(
                 getReefTargetPose(),
                 new PathConstraints(
@@ -222,7 +222,6 @@ public class RobotContainer {
 
 		SimulatedArena.getInstance().simulationPeriodic();
 		Logger.recordOutput("Field Simulation/Robot Pose", simulation.getSimulatedDriveTrainPose());
-		robotDrive.onlyResetOdometry(simulation.getSimulatedDriveTrainPose());
 		Logger.recordOutput("Drive/Command", robotDrive.getCurrentCommand() == null ? "NULL"
 				: robotDrive.getCurrentCommand().getName());
 
