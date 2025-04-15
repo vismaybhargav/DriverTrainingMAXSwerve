@@ -13,6 +13,7 @@
 
 package frc.robot.subsystems.drive;
 
+import static edu.wpi.first.units.Units.MetersPerSecond;
 import static edu.wpi.first.units.Units.Seconds;
 import static frc.robot.Constants.DriveConstants.*;
 
@@ -27,6 +28,7 @@ import edu.wpi.first.math.geometry.Twist2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
+import edu.wpi.first.math.util.Units;
 import edu.wpi.first.units.measure.Time;
 import edu.wpi.first.wpilibj.Alert;
 import edu.wpi.first.wpilibj.Alert.AlertType;
@@ -36,9 +38,12 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.AutoConstants;
+import frc.robot.Constants.DriveConstants;
+import frc.robot.Constants.ModuleConstants;
 import frc.robot.Robot;
 import frc.robot.subsystems.drive.module.*;
 import frc.robot.subsystems.drive.module.Module;
+import frc.robot.util.Features;
 import frc.robot.util.LocalADStarAK;
 import frc.robot.subsystems.drive.gyro.*;
 
@@ -46,6 +51,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
+import org.dyn4j.geometry.Feature;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
@@ -65,7 +71,11 @@ public class Drive extends SubsystemBase {
     private final Module[] modules = new Module[4]; // FL, FR, BL, BR
     private final Alert gyroDisconnectedAlert = new Alert("Disconnected gyro, using kinematics as fallback.",
             AlertType.kError);
-    private SwerveSetpointGenerator setpointGenerator;
+    private SwerveSetpointGenerator setpointGenerator = 
+        new SwerveSetpointGenerator(
+            AutoConstants.ppConfig, 
+            DriveConstants.MAX_SPEED.in(MetersPerSecond)
+        );
     private RobotConfig ppConfig;
 
     private Rotation2d rawGyroRotation = new Rotation2d();
@@ -182,7 +192,7 @@ public class Drive extends SubsystemBase {
         // Calculate module setpoints
         speeds = ChassisSpeeds.discretize(speeds, 0.02);
         SwerveModuleState[] setpointStates = driveKinematics.toSwerveModuleStates(speeds);
-        SwerveDriveKinematics.desaturateWheelSpeeds(setpointStates, maxSpeedMetersPerSecond);
+        SwerveDriveKinematics.desaturateWheelSpeeds(setpointStates, MAX_SPEED);
 
         // Log unoptimized setpoints
         Logger.recordOutput("SwerveStates/Setpoints", setpointStates);
@@ -245,9 +255,6 @@ public class Drive extends SubsystemBase {
         PathPlannerLogging.setLogTargetPoseCallback((targetPose) -> {
             Logger.recordOutput("Odometry/TrajectorySetpoint", targetPose);
         });
-
-        setpointGenerator = new SwerveSetpointGenerator(AutoConstants.ppConfig, getMaxAngularSpeedRadPerSec());
-
     }
 
     /** Stops the drive. */
@@ -343,6 +350,10 @@ public class Drive extends SubsystemBase {
         poseEstimator.resetPosition(rawGyroRotation, getModulePositions(), pose);
     }
 
+    public void onlyResetOdometry(Pose2d pose) {
+        odometry.resetPose(pose);
+    }
+
     /**
      * Adds a new timestamped vision measurement
      * 
@@ -364,22 +375,11 @@ public class Drive extends SubsystemBase {
 
     /** Returns the maximum linear speed in meters per sec. */
     public double getMaxLinearSpeedMetersPerSec() {
-        return maxSpeedMetersPerSecond;
+        return MAX_SPEED.in(MetersPerSecond);
     }
 
     /** Returns the maximum angular speed in radians per sec. */
     public double getMaxAngularSpeedRadPerSec() {
-        return maxSpeedMetersPerSecond / driveBaseRadius;
-    }
-
-    public Command pathFindToOrigin(Pose2d pose) {
-        System.out.println("HELLO HELLO HELLO");
-        return Commands.runOnce(() -> AutoBuilder.pathfindToPose(
-                pose,
-                new PathConstraints(getMaxLinearSpeedMetersPerSec(),
-                        5,
-                        getMaxAngularSpeedRadPerSec(),
-                        Math.pow(getMaxAngularSpeedRadPerSec(), 2))),
-                this);
+        return MAX_SPEED.in(MetersPerSecond) / driveBaseRadius;
     }
 }
