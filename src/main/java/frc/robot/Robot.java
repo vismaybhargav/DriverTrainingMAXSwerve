@@ -143,10 +143,6 @@ public class Robot extends LoggedRobot {
 
   @Override
   public void simulationPeriodic() {
-    Logger.recordOutput("Drive/Command", m_robotContainer.robotDrive.getCurrentCommand() == null ? "NULL" : m_robotContainer.robotDrive.getCurrentCommand().getName());
-
-    Logger.recordOutput("Reef Pose", m_robotContainer.reefTargetPose);
-
     m_robotContainer.updateSimulation();
   }
 }

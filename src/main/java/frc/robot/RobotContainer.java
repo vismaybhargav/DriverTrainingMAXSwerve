@@ -222,6 +222,12 @@ public class RobotContainer {
 
 		SimulatedArena.getInstance().simulationPeriodic();
 		Logger.recordOutput("Field Simulation/Robot Pose", simulation.getSimulatedDriveTrainPose());
+		robotDrive.onlyResetOdometry(simulation.getSimulatedDriveTrainPose());
+		Logger.recordOutput("Drive/Command", robotDrive.getCurrentCommand() == null ? "NULL"
+				: robotDrive.getCurrentCommand().getName());
+
+		Logger.recordOutput("Reef Pose", reefTargetPose);
+
 		Logger.recordOutput("Field Simulation/Coral",
 				SimulatedArena.getInstance().getGamePiecesArrayByType("Coral"));
 		Logger.recordOutput("Field Simulation/Algae",
