@@ -40,9 +40,9 @@ public class ModuleIOMapleSim implements ModuleIO {
     public ModuleIOMapleSim(SwerveModuleSimulation moduleSimulation) {
         this.moduleSimulation = moduleSimulation;
         this.driveMotor =
-                moduleSimulation.useGenericMotorControllerForDrive().withCurrentLimit(Amps.of(drivingCurrentLimitAmps));
+                moduleSimulation.useGenericMotorControllerForDrive().withCurrentLimit(DRIVING_CURRENT_LIMIT);
         this.turnMotor =
-                moduleSimulation.useGenericControllerForSteer().withCurrentLimit(Amps.of(turningCurrentLimitAmps));
+                moduleSimulation.useGenericControllerForSteer().withCurrentLimit(TURNING_CURRENT_LIMIT);
 
         // Enable wrapping for turn PID
         turnController.enableContinuousInput(-Math.PI, Math.PI);

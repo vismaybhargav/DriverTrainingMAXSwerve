@@ -5,12 +5,13 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.util.Units;
 import frc.robot.subsystems.drive.SparkOdometryThread;
 
+import static edu.wpi.first.units.Units.Hertz;
 import static frc.robot.Constants.DriveConstants.odometryFrequency;
 
 import java.util.Queue;
 
 public class GyroIONavX implements GyroIO {
-    private final AHRS navX = new AHRS(AHRS.NavXComType.kMXP_SPI, (byte) odometryFrequency);
+    private final AHRS navX = new AHRS(AHRS.NavXComType.kMXP_SPI, (byte) odometryFrequency.in(Hertz));
     private final Queue<Double> yawPositionQueue;
     private final Queue<Double> yawTimestampQueue;
 

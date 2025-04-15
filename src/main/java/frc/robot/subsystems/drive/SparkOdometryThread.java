@@ -19,6 +19,8 @@ import edu.wpi.first.wpilibj.Notifier;
 import edu.wpi.first.wpilibj.RobotController;
 import frc.robot.Constants.DriveConstants;
 
+import static edu.wpi.first.units.Units.Hertz;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
@@ -55,7 +57,7 @@ public class SparkOdometryThread {
 
     public void start() {
         if (!timestampQueues.isEmpty()) {
-            notifier.startPeriodic(1.0 / DriveConstants.odometryFrequency);
+            notifier.startPeriodic(1.0 / DriveConstants.odometryFrequency.in(Hertz));
         }
     }
 

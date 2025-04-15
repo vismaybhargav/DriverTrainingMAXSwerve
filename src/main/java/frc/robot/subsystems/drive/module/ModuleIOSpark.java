@@ -13,6 +13,9 @@
 
 package frc.robot.subsystems.drive.module;
 
+import static edu.wpi.first.units.Units.Amps;
+import static edu.wpi.first.units.Units.Hertz;
+import static edu.wpi.first.units.Units.Radians;
 import static frc.robot.Constants.DriveConstants.*;
 import static frc.robot.Constants.ModuleConstants.*;
 import static frc.robot.util.SparkUtil.*;
@@ -99,7 +102,7 @@ public class ModuleIOSpark implements ModuleIO {
         var driveConfig = new SparkMaxConfig();
         driveConfig
                 .idleMode(IdleMode.kBrake)
-                .smartCurrentLimit(drivingCurrentLimitAmps)
+                .smartCurrentLimit((int)DRIVING_CURRENT_LIMIT.in(Amps))
                 .voltageCompensation(12.0);
         driveConfig
                 .encoder
@@ -116,7 +119,7 @@ public class ModuleIOSpark implements ModuleIO {
         driveConfig
                 .signals
                 .primaryEncoderPositionAlwaysOn(true)
-                .primaryEncoderPositionPeriodMs((int) (1000.0 / odometryFrequency))
+                .primaryEncoderPositionPeriodMs((int) (1000.0 / odometryFrequency.in(Hertz)))
                 .primaryEncoderVelocityAlwaysOn(true)
                 .primaryEncoderVelocityPeriodMs(20)
                 .appliedOutputPeriodMs(20)
@@ -146,12 +149,12 @@ public class ModuleIOSpark implements ModuleIO {
                 .closedLoop
                 .feedbackSensor(FeedbackSensor.kAbsoluteEncoder)
                 .positionWrappingEnabled(true)
-                .positionWrappingInputRange(turnPIDMinInput, turnPIDMaxInput)
+                .positionWrappingInputRange(turnPIDMinInput.in(Radians), turnPIDMaxInput.in(Radians))
                 .pidf(turnKp, 0.0, turnKd, 0.0);
         turnConfig
                 .signals
                 .absoluteEncoderPositionAlwaysOn(true)
-                .absoluteEncoderPositionPeriodMs((int) (1000.0 / odometryFrequency))
+                .absoluteEncoderPositionPeriodMs((int) (1000.0 / odometryFrequency.in(Hertz)))
                 .absoluteEncoderVelocityAlwaysOn(true)
                 .absoluteEncoderVelocityPeriodMs(20)
                 .appliedOutputPeriodMs(20)
@@ -228,7 +231,7 @@ public class ModuleIOSpark implements ModuleIO {
     @Override
     public void setTurnPosition(Rotation2d rotation) {
         double setpoint =
-                MathUtil.inputModulus(rotation.plus(zeroRotation).getRadians(), turnPIDMinInput, turnPIDMaxInput);
+                MathUtil.inputModulus(rotation.plus(zeroRotation).getRadians(), turnPIDMinInput.in(Radians), turnPIDMaxInput.in(Radians));
         turnController.setReference(setpoint, ControlType.kPosition);
     }
 }

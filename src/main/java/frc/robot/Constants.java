@@ -14,10 +14,14 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
+import edu.wpi.first.units.measure.Angle;
+import edu.wpi.first.units.measure.AngularVelocity;
+import edu.wpi.first.units.measure.Current;
 import edu.wpi.first.units.measure.Distance;
+import edu.wpi.first.units.measure.Frequency;
+import edu.wpi.first.units.measure.LinearVelocity;
 import edu.wpi.first.units.measure.Mass;
 import edu.wpi.first.units.measure.MomentOfInertia;
-import frc.robot.subsystems.drive.Drive;
 import org.ironmaple.simulation.drivesims.COTS;
 import org.ironmaple.simulation.drivesims.configs.DriveTrainSimulationConfig;
 import org.ironmaple.simulation.drivesims.configs.SwerveModuleSimulationConfig;
@@ -26,6 +30,7 @@ import com.pathplanner.lib.config.ModuleConfig;
 import com.pathplanner.lib.config.RobotConfig;
 
 import static edu.wpi.first.units.Units.*;
+import static frc.robot.Constants.DriveConstants.DRIVING_CURRENT_LIMIT;
 import static frc.robot.Constants.DriveConstants.robotLength;
 import static frc.robot.Constants.DriveConstants.robotWidth;
 import static frc.robot.Constants.ModuleConstants.*;
@@ -63,15 +68,15 @@ public final class Constants {
   public static final class DriveConstants {
     // Driving Parameters - Note that these are not the maximum capable speeds of
     // the robot, rather the allowed maximum speeds
-    public static final double maxSpeedMetersPerSecond = 5.41;
-    public static final double maxAngularSpeed = 2 * Math.PI; // radians per second
+    public static final LinearVelocity MAX_SPEED = MetersPerSecond.of(5.41);
+    public static final AngularVelocity MAX_ANGULAR_SPEED = RadiansPerSecond.of(2 * Math.PI);
 
-    public static final double odometryFrequency = 100.0; // Hz
+    public static final Frequency odometryFrequency = Hertz.of(100); // Hz
 
     // Chassis configuration
-    public static final double trackWidth = Units.inchesToMeters(22.5);
+    public static final Distance trackWidth = Inches.of(22.5);
     // Distance between centers of right and left wheels on robot
-    public static final double wheelBase = Units.inchesToMeters(22.75);
+    public static final Distance wheelBase = Inches.of(22.75);
 
     public static final Mass robotMass = Kilogram.of(45); 
     public static final MomentOfInertia robotMOI = KilogramSquareMeters.of(6.883);
@@ -79,13 +84,13 @@ public final class Constants {
     public static final Distance robotWidth = Inches.of(35.5);
     public static final Distance robotLength = Inches.of(35.5);
 
-    public static final double driveBaseRadius = Math.hypot(trackWidth / 2.0, wheelBase / 2.0);
+    public static final double driveBaseRadius = Math.hypot(trackWidth.in(Meters) / 2.0, wheelBase.in(Meters) / 2.0);
     // Distance between front and back wheels on robot
     public static final Translation2d[] moduleTranslations = new Translation2d[] {
-        new Translation2d(wheelBase / 2, trackWidth / 2),
-        new Translation2d(wheelBase / 2, -trackWidth / 2),
-        new Translation2d(-wheelBase / 2, trackWidth / 2),
-        new Translation2d(-wheelBase / 2, -trackWidth / 2)
+        new Translation2d(wheelBase.in(Meters) / 2, trackWidth.in(Meters) / 2),
+        new Translation2d(wheelBase.in(Meters) / 2, -trackWidth.in(Meters) / 2),
+        new Translation2d(-wheelBase.in(Meters) / 2, trackWidth.in(Meters) / 2),
+        new Translation2d(-wheelBase.in(Meters) / 2, -trackWidth.in(Meters) / 2)
     };
 
     public static final SwerveDriveKinematics driveKinematics = new SwerveDriveKinematics(moduleTranslations);
@@ -97,10 +102,10 @@ public final class Constants {
     public static final Rotation2d backRightZeroRotation = new Rotation2d(0.0);
 
     // Angular offsets of the modules relative to the chassis in radians
-    public static final double frontLeftChassisAngularOffset = -Math.PI / 2;
-    public static final double frontRightChassisAngularOffset = 0;
-    public static final double backLeftChassisAngularOffset = Math.PI;
-    public static final double backRightChassisAngularOffset = Math.PI / 2;
+    public static final Angle frontLeftChassisAngularOffset = Radians.of(-Math.PI / 2);
+    public static final Angle frontRightChassisAngularOffset = Radians.of(0);
+    public static final Angle backLeftChassisAngularOffset = Radians.of(Math.PI);
+    public static final Angle backRightChassisAngularOffset = Radians.of(Math.PI / 2);
 
     // SPARK MAX CAN IDs
     public static final int frontLeftDrivingCanId = 24;
@@ -139,11 +144,11 @@ public final class Constants {
     public static final double turnKd = 0.0;
     public static final double turnSimP = 8.0;
     public static final double turnSimD = 0.0;
-    public static final double turnPIDMinInput = 0; // Radians
-    public static final double turnPIDMaxInput = 2 * Math.PI; // Radians
+    public static final Angle turnPIDMinInput = Radians.of(0); // Radians
+    public static final Angle turnPIDMaxInput = Radians.of(2 * Math.PI); // Radians
 
-    public static final int drivingCurrentLimitAmps = 40;
-    public static final int turningCurrentLimitAmps = 30;
+    public static final Current DRIVING_CURRENT_LIMIT = Amps.of(40);
+    public static final Current TURNING_CURRENT_LIMIT = Amps.of(30);
 
     public static final boolean gyroReversed = false;
   }
@@ -166,7 +171,6 @@ public final class Constants {
         / drivingMotorReduction;
 
     // Drive motor configuration
-    public static final int driveMotorCurrentLimit = 60;
     public static final double wheelRadiusMeters = Units.inchesToMeters(1.5);
     public static final DCMotor driveGearbox = DCMotor.getNEO(1);
 
@@ -238,7 +242,7 @@ public final class Constants {
               maxSpeedMetersPerSecond,
               1.2,
               driveGearbox.withReduction(drivingMotorReduction),
-              driveMotorCurrentLimit,
+              DRIVING_CURRENT_LIMIT.in(Amps),
               1),
             DriveConstants.moduleTranslations);
 
