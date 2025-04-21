@@ -7,12 +7,22 @@ package frc.robot;
 
 // Systems
 import choreo.auto.AutoFactory;
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.PowerDistribution;
+import frc.robot.Constants.DriveConstants;
+import frc.robot.Constants.SimConstants;
 import frc.robot.input.TeleopInput;
 import frc.robot.systems.DriveFSMSystem;
+import frc.robot.systems.drive.gyro.GyroIO;
 import frc.robot.systems.drive.gyro.GyroIONavX;
 import frc.robot.systems.drive.gyro.GyroIOSim;
+import frc.robot.systems.drive.module.ModuleIOMapleSim;
+import frc.robot.systems.drive.module.ModuleIOSim;
 import frc.robot.systems.drive.module.ModuleIOSpark;
+
+import org.ironmaple.simulation.SimulatedArena;
+import org.ironmaple.simulation.drivesims.SwerveDriveSimulation;
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
@@ -29,6 +39,7 @@ public class Robot extends LoggedRobot {
 
 	// Systems
 	private DriveFSMSystem driveSystem;
+	private SwerveDriveSimulation driveSim;
 
 
 	/**
@@ -68,13 +79,32 @@ public class Robot extends LoggedRobot {
 						new ModuleIOSpark(0),
 						new ModuleIOSpark(1),
 						new ModuleIOSpark(2),
-						new ModuleIOSpark(3)
-				);
-			} else if(Robot.isSimulation()) {
-                driveSystem = new DriveFSMSystem(
-                    new GyroIOSim(null), 
-                    new ModuleIOSim(), null, null, null)
-            }
+						new ModuleIOSpark(3),
+						(pose) -> {});
+			} else if (Robot.isSimulation()) {
+				if (Features.MAPLE_SIM_ENABLED) {
+					driveSim = new SwerveDriveSimulation(SimConstants.MAPLE_SIM_CONFIG, new Pose2d(3, 3, new Rotation2d()));
+					SimulatedArena.getInstance().addDriveTrainSimulation(driveSim);
+
+					var simModules = driveSim.getModules();
+
+					driveSystem = new DriveFSMSystem(
+							new GyroIOSim(driveSim.getGyroSimulation()),
+							new ModuleIOMapleSim(simModules[0]),
+							new ModuleIOMapleSim(simModules[1]),
+							new ModuleIOMapleSim(simModules[2]),
+							new ModuleIOMapleSim(simModules[3]),
+							driveSim::setSimulationWorldPose);
+				} else {
+					driveSystem = new DriveFSMSystem(
+							new GyroIO() {},
+							new ModuleIOSim(),
+							new ModuleIOSim(),
+							new ModuleIOSim(),
+							new ModuleIOSim(),
+							(pose) -> {});
+				}
+			}
 		}
 	}
 
@@ -94,6 +124,8 @@ public class Robot extends LoggedRobot {
 
 	@Override
 	public void teleopPeriodic() {
+		driveSystem.updateModules();
+		driveSystem.update(input);
 	}
 
 	@Override
@@ -122,18 +154,12 @@ public class Robot extends LoggedRobot {
 
 	@Override
 	public void simulationPeriodic() {
-        if(driveSystem == null) return;
-
-        Logger.recordOutput("DriveFSM/Odometry", driveSystem.getPose());
-        Logger.recordOutput("DriveFSM/Swerve Module States", driveSystem.getModuleStates());
-        Logger.recordOutput("DriveFSM/Chassis Speeds", driveSystem.getChassisSpeeds());
-     }
+		SimulatedArena.getInstance().simulationPeriodic();
+		Logger.recordOutput("Field Simulation/Pose", driveSim.getSimulatedDriveTrainPose());
+	}
 
 	// Do not use robotPeriodic. Use mode specific periodic methods instead.
 	@Override
 	public void robotPeriodic() {
-		if(driveSystem != null) {
-			Logger.recordOutput("DriveFSM/Current State", driveSystem.getCurrentState());
-		}
 	}
 }

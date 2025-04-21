@@ -1,23 +1,34 @@
 package frc.robot.systems;
 
 import edu.wpi.first.math.MathUtil;
+import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Twist2d;
 import edu.wpi.first.math.kinematics.*;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import frc.robot.Constants;
+import frc.robot.Features;
+import frc.robot.Robot;
 import frc.robot.input.TeleopInput;
+import frc.robot.systems.drive.SparkOdometryThread;
 import frc.robot.systems.drive.gyro.GyroIO;
+import frc.robot.systems.drive.gyro.GyroIOInputsAutoLogged;
 import frc.robot.systems.drive.module.ModuleIO;
 import frc.robot.systems.drive.module.Module;
 import frc.robot.Constants.DriveConstants;
 
+import org.dyn4j.geometry.Rotation;
 import org.littletonrobotics.junction.AutoLogOutput;
 import org.littletonrobotics.junction.Logger;
 
+import static frc.robot.Constants.DriveConstants.DRIVE_KINEMATICS;
+
+import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Consumer;
 
 public class DriveFSMSystem extends SubsystemBase {
 	/* ======================== Constants ======================== */
@@ -31,21 +42,28 @@ public class DriveFSMSystem extends SubsystemBase {
 
 	// Hardware devices should be owned by one and only one system. They must
 	// be private to their owner system and may not be used elsewhere.
-	private final Module frontLeft;
-	private final Module frontRight;
-	private final Module rearLeft;
-	private final Module rearRight;
+	private final Module[] modules = new Module[4]; // FL, FR, BL, BR
 
 	public static final Lock odometryLock = new ReentrantLock();
 
 	private final GyroIO gyro;
+	private final GyroIOInputsAutoLogged gyroInputs = new GyroIOInputsAutoLogged();
+	
+	private Rotation2d rawGyroRotation = new Rotation2d();
+	private final SwerveModulePosition[] lastModulePositions = // For delta tracking
+            new SwerveModulePosition[] {
+                    new SwerveModulePosition(),
+                    new SwerveModulePosition(),
+                    new SwerveModulePosition(),
+                    new SwerveModulePosition()
+            };
 
-	private final SwerveDriveOdometry odometry = new SwerveDriveOdometry(
-			DriveConstants.DRIVE_KINEMATICS,
-			getHeading(),
-			getModulePositions()
-    );
+	private final SwerveDriveOdometry odometry;
 
+	private final SwerveDrivePoseEstimator poseEstimator = new SwerveDrivePoseEstimator(
+		DRIVE_KINEMATICS, rawGyroRotation, lastModulePositions, new Pose2d());
+	
+	private final Consumer<Pose2d> resetSimPoseCallback;
 	/* ======================== Constructor ======================== */
 	/**
 	 * Create FSMSystem and initialize to starting state. Also perform any
@@ -57,16 +75,26 @@ public class DriveFSMSystem extends SubsystemBase {
 		ModuleIO frontLeftIO,
 		ModuleIO frontRightIO,
 		ModuleIO rearLeftIO,
-		ModuleIO rearRightIO
+		ModuleIO rearRightIO,
+		Consumer<Pose2d> resetSimPoseCallback
 	) {
 		// Perform hardware init
-		frontLeft = new Module(frontLeftIO, 0);
-		frontRight = new Module(frontRightIO, 1);
-		rearLeft = new Module(rearLeftIO, 2);
-		rearRight = new Module(rearRightIO, 3);
+		modules[0] = new Module(frontLeftIO, 0);
+		modules[1] = new Module(frontRightIO, 1);
+		modules[2] = new Module(rearLeftIO, 2);
+		modules[3] = new Module(rearRightIO, 3);
+
+		this.resetSimPoseCallback = resetSimPoseCallback;
 
 		this.gyro = gyro;
 
+		odometry = new SwerveDriveOdometry(
+			DriveConstants.DRIVE_KINEMATICS, 
+			getHeading(), 
+			getModulePositions()
+		);
+
+		SparkOdometryThread.getInstance().start();
 		// Reset state machine
 		reset();
 	}
@@ -177,6 +205,42 @@ public class DriveFSMSystem extends SubsystemBase {
 		}
 	}
 
+	public void updateModules() {
+		gyro.updateInputs(gyroInputs);
+
+		Logger.processInputs("DriveFSM/Gyro", gyroInputs);
+
+		for (Module module : modules) {
+			module.periodic();
+		}
+
+		double[] sampleTimestamps = modules[0].getOdometryTimestamps();
+
+		for (int i = 0; i < sampleTimestamps.length; i++) {
+			var modPos = new SwerveModulePosition[4];
+			var modDelta = new SwerveModulePosition[4];
+			for (int j = 0; j < 4; j++) {
+				modPos[j] = modules[j].getOdometryPositions()[i];
+				modDelta[j] = new SwerveModulePosition(
+						modPos[j].distanceMeters - lastModulePositions[j].distanceMeters,
+						modPos[j].angle);
+				lastModulePositions[j] = modPos[j];
+			}
+
+			if (gyroInputs.connected) {
+				rawGyroRotation = gyroInputs.odometryYawPositions[i];
+			} else {
+				Twist2d twist = DRIVE_KINEMATICS.toTwist2d(modDelta);
+				rawGyroRotation = rawGyroRotation.plus(new Rotation2d(twist.dtheta));
+			}
+
+			poseEstimator.updateWithTime(sampleTimestamps[i], rawGyroRotation, modPos);
+		}
+
+		odometry.update(getHeading(), getModulePositions());
+
+	}
+
 	/**
 	 * Drive the robot using the given chassis speeds. Robot relative or field
 	 * relative depends on how
@@ -188,14 +252,15 @@ public class DriveFSMSystem extends SubsystemBase {
 	private void drive(ChassisSpeeds speeds) {
 		var states = DriveConstants.DRIVE_KINEMATICS.toSwerveModuleStates(speeds);
 		SwerveDriveKinematics.desaturateWheelSpeeds(states, DriveConstants.MAX_SPEED_METERS_PER_SECOND);
+
+		Logger.recordOutput("DriveFSM/Setpoint States", states);
 		setModuleStates(states);
 	}
 
 	private void setModuleStates(SwerveModuleState[] states) {
-		frontLeft.runSetpoint(states[0]);
-		frontRight.runSetpoint(states[1]);
-		rearLeft.runSetpoint(states[2]);
-		rearRight.runSetpoint(states[3]);
+		for (int i = 0; i < modules.length; i++) {
+			modules[i].runSetpoint(states[i]);
+		}
 	}
 
 	/**
@@ -215,7 +280,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	@AutoLogOutput(key = "DriveFSM/Current Pose")
 	public Pose2d getPose() {
-		return odometry.getPoseMeters();
+		return poseEstimator.getEstimatedPosition();
 	}
 
 	/**
@@ -225,12 +290,8 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	@AutoLogOutput(key = "DriveFSM/Swerve States")
 	public SwerveModuleState[] getModuleStates() {
-		return new SwerveModuleState[] {
-				frontLeft.getState(),
-				frontRight.getState(),
-				rearLeft.getState(),
-				rearRight.getState()
-		};
+		// Convert this into using streams
+		return Arrays.stream(modules).map(Module::getState).toArray(SwerveModuleState[]::new);
 	}
 
 	/**
@@ -250,7 +311,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	@AutoLogOutput(key = "DriveFSM/Gyro Heading")
 	public Rotation2d getHeading() {
-		return odometry.getPoseMeters().getRotation();
+		return getPose().getRotation();
 	}
 
 	/**
@@ -260,12 +321,7 @@ public class DriveFSMSystem extends SubsystemBase {
 	 */
 	@AutoLogOutput(key = "DriveFSM/Module Positions")
 	public SwerveModulePosition[] getModulePositions() {
-		return new SwerveModulePosition[] {
-				frontLeft.getPosition(),
-				frontRight.getPosition(),
-				rearLeft.getPosition(),
-				rearRight.getPosition()
-		};
+		return Arrays.stream(modules).map(Module::getPosition).toArray(SwerveModulePosition[]::new);
 	}
 
 	/**

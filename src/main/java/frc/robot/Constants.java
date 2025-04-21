@@ -4,9 +4,19 @@
 
 package frc.robot;
 
+import static edu.wpi.first.units.Units.Inches;
+import static edu.wpi.first.units.Units.KilogramSquareMeters;
+import static edu.wpi.first.units.Units.Meters;
+import static edu.wpi.first.units.Units.Pounds;
+import static edu.wpi.first.units.Units.Volts;
+
+import org.ironmaple.simulation.drivesims.COTS;
+import org.ironmaple.simulation.drivesims.configs.*;
+
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
+import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.trajectory.TrapezoidProfile;
 import edu.wpi.first.math.util.Units;
 
@@ -23,7 +33,22 @@ import edu.wpi.first.math.util.Units;
  * constants are needed, to reduce verbosity.
  */
 public final class Constants {
-  public static final class RobotConstants {
+  public static final class SimConstants {
+    public static final DriveTrainSimulationConfig MAPLE_SIM_CONFIG = DriveTrainSimulationConfig.Default()
+            .withCustomModuleTranslations(DriveConstants.MODULE_TRANSLATIONS)
+            .withRobotMass(Pounds.of(DriveConstants.ROBOT_MASS))
+            .withGyro(COTS.ofPigeon2())
+            .withBumperSize(Inches.of(35.5), Inches.of(35.5))
+            .withSwerveModule(new SwerveModuleSimulationConfig(
+                    ModuleConstants.DRIVING_MOTOR,
+                    ModuleConstants.TURNING_MOTOR,
+                    ModuleConstants.DRIVING_MOTOR_REDUCTION,
+                    ModuleConstants.TURNING_MOTOR_REDUCTION,
+                    Volts.of(0.1),
+                    Volts.of(0.1),
+                    Meters.of(ModuleConstants.WHEEL_DIAMETER_METERS / 2),
+                    KilogramSquareMeters.of(0.02),
+                    1.2));
   }
 
   public static final class DriveConstants {
@@ -33,22 +58,28 @@ public final class Constants {
     public static final double MAX_ANGULAR_SPEED_RAD_PER_SEC = 2 * Math.PI; // radians per second
 
     public static final boolean IS_FIELD_RELATIVE = true;
-    public static final double SPEED_DAMP_FACTOR = 2;
+    public static final double SPEED_DAMP_FACTOR = 1;
 
     public static final double ODOMETRY_FREQUENCY = 100.0; // Hz
     public static final boolean USE_ODOMETRY = true;
+
+    // Robot mass in kg
+    public static final double ROBOT_MASS = 100; // kg
 
     // Chassis configuration
     public static final double TRACK_WIDTH_IN = Units.inchesToMeters(26.5);
     // Distance between centers of right and left wheels on robot
     public static final double WHEEL_BASE_IN = Units.inchesToMeters(26.5);
     // Distance between front and back wheels on robot
-    public static final SwerveDriveKinematics DRIVE_KINEMATICS = new SwerveDriveKinematics(
-            new Translation2d(WHEEL_BASE_IN / 2, TRACK_WIDTH_IN / 2),
-            new Translation2d(WHEEL_BASE_IN / 2, -TRACK_WIDTH_IN / 2),
-            new Translation2d(-WHEEL_BASE_IN / 2, TRACK_WIDTH_IN / 2),
-            new Translation2d(-WHEEL_BASE_IN / 2, -TRACK_WIDTH_IN / 2));
 
+    public static final Translation2d[] MODULE_TRANSLATIONS = new Translation2d[] {
+        new Translation2d(WHEEL_BASE_IN / 2, TRACK_WIDTH_IN / 2),
+        new Translation2d(WHEEL_BASE_IN / 2, -TRACK_WIDTH_IN / 2),
+        new Translation2d(-WHEEL_BASE_IN / 2, TRACK_WIDTH_IN / 2),
+        new Translation2d(-WHEEL_BASE_IN / 2, -TRACK_WIDTH_IN / 2)
+    };
+
+    public static final SwerveDriveKinematics DRIVE_KINEMATICS = new SwerveDriveKinematics(MODULE_TRANSLATIONS);
 
     // Zeroed rotation values for each module, see setup instructions
     public static final Rotation2d FRONT_LEFT_ZERO_ROTATION = new Rotation2d(0.0);
@@ -123,6 +154,9 @@ public final class Constants {
     public static final double DRIVING_CURRENT_LIMIT = 60;
     public static final double TURNING_CURRENT_LIMIT = 20;
 
+    public static final DCMotor DRIVING_MOTOR = DCMotor.getNEO(1);
+    public static final DCMotor TURNING_MOTOR = DCMotor.getNeo550(1);
+
     // Drive encoder configuration
     public static final double driveEncoderPositionFactor =
             2 * Math.PI / DRIVING_MOTOR_REDUCTION; // Rotor Rotations -> Wheel Radians
@@ -133,11 +167,12 @@ public final class Constants {
     public static final boolean turnEncoderInverted = true;
     public static final double turnEncoderPositionFactor = 2 * Math.PI; // Rotations -> Radians
     public static final double turnEncoderVelocityFactor = (2 * Math.PI) / 60.0; // RPM -> Rad/Sec
+    public static final double TURNING_MOTOR_REDUCTION = 9424.0 / 203.0;
   }
 
   public static final class OIConstants {
     public static final int kDriverControllerPort = 0;
-    public static final double DRIVE_DEADBAND = 0.05;
+    public static final double DRIVE_DEADBAND = 0.5;
   }
 
   public static final class AutoConstants {

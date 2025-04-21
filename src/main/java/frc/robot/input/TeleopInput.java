@@ -2,6 +2,7 @@ package frc.robot.input;
 
 // WPILib Imports
 import edu.wpi.first.wpilibj.PS4Controller;
+import edu.wpi.first.wpilibj.XboxController;
 
 /**
  * Common class for providing driver inputs during Teleop.
@@ -21,7 +22,7 @@ public class TeleopInput {
 
 	/* ======================== Private variables ======================== */
 	// Input objects
-	private final PS4Controller driveController;
+	private final XboxController driveController;
 	private final PS4Controller mechController;
 
 	/* ======================== Constructor ======================== */
@@ -31,7 +32,7 @@ public class TeleopInput {
 	 * by WPILib until teleop mode.
 	 */
 	public TeleopInput() {
-		driveController = new PS4Controller(DRIVE_CONTROLLER_PORT);
+		driveController = new XboxController(DRIVE_CONTROLLER_PORT);
 		mechController = new PS4Controller(MECH_CONTROLLER_PORT);
 	}
 
@@ -53,10 +54,10 @@ public class TeleopInput {
 	}
 
 	public boolean getDriveControllerZeroHeadingPressed() {
-		return driveController.getShareButton();
+		return driveController.getXButton();
 	}
 
 	public boolean getDriveControllerAlignToTagPressed() {
-		return driveController.getSquareButton();
+		return driveController.getYButton();
 	}
 }
